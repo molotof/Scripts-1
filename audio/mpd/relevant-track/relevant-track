@@ -1,0 +1,254 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+### MPD Relevant Tracks ########
+# Version 0.3 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Dependencies:
+#
+# jellyfish (phonetic similarity matching)
+# http://pypi.python.org/pypi/jellyfish
+#
+# python-mpd (MPD client library)
+# http://jatreuman.indefero.net/p/python-mpd
+
+from __future__ import with_statement, print_function
+from collections import namedtuple
+from getopt import getopt, GetoptError
+from jellyfish import nysiis, damerau_levenshtein_distance
+from mpd import MPDClient, CommandError, ConnectionError, ProtocolError
+from re import compile, sub
+from socket import error as SocketError
+from sys import argv, exit, stderr
+import os
+try:
+    import cPickle as pickle
+except:
+    import pickle
+
+addr = { 'host': 'localhost', 'port': 6600 }
+password = False
+cache = os.path.join(os.path.expanduser('~'), '.cache', 'relevant-track', 'cache.pickle')
+
+Track = namedtuple('Track', 'file tags')
+library = []
+last_update = 0
+strip_chars = compile(r'[^\w\- ]')
+
+def usage():
+    print("""MPD Relevant Tracks
+Version 0.4 by Scott Garrett
+Wintervenom [(at)] gmail.com
+
+Usage: relevant-track [OPTS] QUERY [QUERY ...]
+    -h --help           Obvious. ;)
+    -p --phonetic       Compare words phonetically instead of exact.
+    -r --no-pos-sort    Don't sort results by word order in query.
+                        Exact matches will still come first.
+    -m --mutation-limit Allow up to this many mutations. Default: 0.
+    -n --lines          Return up to this many results. Default: 5.
+    -s --split          Split words as separate queries.
+    -k --kill-cache     Kill and rebuild the database cache.
+       --host           Address of MPD server.
+       --port           Listening port of MPD server.
+       --pass           Password of MPD server.
+    """)
+    exit(0)
+
+def debug(string):
+    print(string, file=stderr)
+
+def collapse(field):
+    """ Collapse field lists to a single string.
+    """
+    if isinstance(field, list):
+        return ' '.join(field)
+    return field
+
+def connect(client, addr):
+    """ Try to connect to MPD server. """
+    try:
+        client.connect(**addr)
+    except SocketError:
+        return False
+    return True
+
+def auth(client, password):
+    """ Try to authunticate to the MPD server. """
+    try:
+        client.password(password)
+    except CommandError:
+        return False
+    return True
+
+def save_cache():
+    """ Save database to cache file. """
+    try:
+        if not os.path.exists(os.path.dirname(cache)):
+            debug('Cache directory does not exist, creating it.')
+            os.makedirs(os.path.dirname(cache))
+        with open(cache, 'wb') as f:
+            pickle.dump([library, last_update], f)
+        debug('Saved database to cache.')
+        return True
+    except:
+        debug('Failed to save database to cache.')
+        return False
+
+def load_cache():
+    """ Load database from cache file. """
+    global library, last_update
+    try:
+        if not os.path.exists(cache):
+            debug('No cache, indexing database...')
+            return False
+        with open(cache, 'rb') as f:
+            library, last_update = pickle.load(f)
+        debug('Read database from cache.')
+
+        return True
+    except:
+        debug('Failed to read database from cache.')
+        return False
+
+def cache_db():
+    """ Load/Rebuild and save the database. """
+    global library, last_update
+    client = MPDClient()
+    debug('Connecting to %s:%d...' % (addr['host'], addr['port']))
+    if connect(client, addr):
+        debug('Connection established.')
+    else:
+        debug('Connection failed.')
+        exit(2)
+    if password:
+        if auth(client, password):
+            debug('Authuntication successful.')
+        else:
+            debug('Authuntication failed.')
+            exit(3)
+    cache_loaded = load_cache()
+    # If there was no cache file or the database changed, recache.
+    if cache_loaded == False or last_update != client.stats()['db_update']:
+        library = []
+        last_update = client.stats()['db_update']
+        debug('Reading track metadata from database...')
+        for track in client.listallinfo():
+            if 'file' in track:
+                filetitle = track['file'].rsplit('.', 1)[0]
+                title = collapse(track.setdefault('title', filetitle))
+                #artist = collapse(track.setdefault('artist', ''))
+                #album = collapse(track.setdefault('album', ''))
+                #tags = strip_chars.sub(' ', title.lower())
+                tags = strip_chars.sub(' ', '%s' % (title.lower()))
+                library.append(Track(track['file'], tags))
+        client.disconnect()
+        debug('Saving database to cache...')
+        save_cache()
+    debug('Database loaded.')
+
+def rate_match(query, string, phonetic=None, mutation_limit=1, position_sort=True):
+    """ Rate how relevant the query is to the string.
+    If the query is matched somewhere in the string, it will
+    get a combo bonus for every consecutive word matched. """
+    query = query.split()
+    string = string.split()
+    if phonetic:
+        # Convert words in string to phonetic representation.
+        query = [nysiis(word) for word in query]
+        string = [nysiis(word) for word in string]
+    # Return a huge score if exact match.
+    if query == string:
+        return -99999999
+    # The lower, the better.
+    score = 0
+    # Bonus for matching consecutive parts of string in query.
+    combo = 0
+    # Remember where the last match was found so we don't count old ones.
+    match_pos = -1
+    end = len(query)
+    pos_a = 0
+    for word_a in query:
+        pos_b = 0
+        for word_b in string:
+            # The higher, the less similar.
+            s = damerau_levenshtein_distance(word_a, word_b)
+            score += s
+            if pos_b > match_pos:
+                # Give a combo bonus (accounting for position) if no mutations.
+                # Words get a smaller bonus the further they are down in the query or string.
+                if s <= mutation_limit:
+                    combo += 1
+                    if position_sort:
+                        score -= combo * (1000 * (1 + end - pos_a) - pos_b * 50) - s * 500
+                    else:
+                        score -= combo * 1000 - s * 100
+                    match_pos = pos_b
+                    # We don't need to keep iterating if the word matched.
+                    break
+                else:
+                    combo = 0
+            pos_b += 1
+        pos_a += 1
+    return score
+
+def search(query, db, phonetic, mutation_limit=0, position_sort=True):
+    query = strip_chars.sub(' ', query)
+    matches = db
+    # Sort matches by most relevant.
+    matches.sort(key=lambda item: rate_match(query, item.tags, phonetic, mutation_limit, position_sort))
+    return matches[:100]
+
+def main():
+    global addr, password
+    opt_max_matches = 5
+    opt_phonetic = False
+    opt_split = False
+    opt_mutation_limit = 0
+    opt_position_sort = True
+    try:
+        opts, args = getopt(
+            argv[1:], 'hkn:psm:r',['help','kill-cache', 'lines=', 'phonetic',
+                                   'host=', 'port=', 'password=', 'split',
+                                   'mutation-limit=', 'no-pos-sort'])
+    except GetoptError, err:
+        debug(str(err))
+        exit(1)
+    for o, a in opts:
+        if o in ('-k', '--kill-cache'):
+            debug('--kill-cache is set, deleting cache.')
+            if os.path.exists(cache):
+                os.unlink(cache)
+            opt_cache = False
+        if o in ('-n', '--lines'):
+            opt_max_matches = int(a)
+        if o in ('-p', '--phonetic'):
+            opt_phonetic = True
+        if o in ('-h', '--help'):
+            usage()
+        if o in ('-s', '--split'):
+            opt_split = True
+        if o in ('-m', '--mutation-limit'):
+            opt_mutation_limit = int(a)
+        if o in ('-r', '--no-pos-sort'):
+            opt_position_sort = False
+        if o == '--host':
+            addr['host'] = a
+        if o == '--port':
+            addr['port'] = int(a)
+        if o == '--password':
+            password = a
+    cache_db()
+    matches = library
+    for query in args:
+        query = query.lower()
+        if not opt_split:
+            matches = search(query, matches, opt_phonetic, opt_mutation_limit, opt_position_sort)
+        else:
+            for word in query.split():
+                matches = search(word, matches, opt_phonetic, opt_mutation_limit, opt_position_sort)
+    for match in matches[:opt_max_matches]:
+        print(match.file)
+
+if __name__ == '__main__':
+    main()

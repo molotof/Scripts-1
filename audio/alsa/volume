@@ -1,0 +1,43 @@
+#!/bin/bash
+### Smooth Volume ##############
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+if [[ "$2" ]]; then
+    c=$1
+    shift
+else
+    c='Master'
+fi
+current=$(amixer -c0 get "$c" | tail -1 | grep -o '[0-9]\+%' | tr -d '%')
+mute="/tmp/.$USER-$c-mute"
+[[ -z $current ]] && exit 1
+case $1 in
+    'up')
+        amixer -c0 set "$c" 1+% &> /dev/null
+        ;;
+    'down')
+        amixer -c0 set "$c" 1-% &> /dev/null
+        ;;
+    'mute')
+        if [[ -f "$mute" ]]; then
+            $0 "$c" $(grep -o '[[:digit:]]\+' "$mute")
+            rm "$mute"
+        else
+            $0 "$c" 0
+            echo "$current" > "$mute"
+        fi
+        ;;
+    *)
+        inc=1; [[ $1 -lt $current ]] && inc=-1
+        while :; do
+            amixer -c0 set "$c" $((current += $inc))% &> /dev/null
+            [[ $2 ]] && sleep 0.$2
+            if [[ $inc == 1 ]]; then
+                [[ $current -gt $1 ]] && exit
+            else
+                [[ $current -lt $1 ]] && exit
+            fi
+        done
+        ;;
+esac

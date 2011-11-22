@@ -1,0 +1,11 @@
+#!/bin/bash
+head='! Scheme Generator: Start'
+tail='! Scheme Generator: End'
+file="$HOME/.Xdefaults"
+image="$HOME/.background"
+
+sed -i "/$head/,/$tail/d" $file
+echo "$head" >> $file
+term-color-generator "$image" >> $file
+echo "$tail" >> $file
+

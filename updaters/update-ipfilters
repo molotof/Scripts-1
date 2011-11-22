@@ -1,0 +1,14 @@
+#!/bin/bash
+### IP Filter Updater ##########
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+filter="$HOME/.local/share/ipfilter.p2p"
+tmp="/tmp/blocklist.tmp"
+mkdir -p "${filter%/*}"
+[[ -f "$filter" ]] && rm "$filter"
+for f in level1 templist bogon dshield; do
+    wget -t3 -T15 http://www.bluetack.co.uk/config/$f.gz -O "$tmp" &&
+        zcat "$tmp" >> "$filter"
+    rm "$tmp"
+done

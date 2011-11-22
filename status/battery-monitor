@@ -1,0 +1,121 @@
+#!/bin/bash
+### Battery Monitor Daemon #####
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+###############
+### Globals ###
+###############
+
+# AC adapter device (in /proc/acpi/ac_adapter).
+ac_adapter_dev=ACAD
+
+# Battery device (in /proc/acpi/battery).
+battery_dev=BAT1
+
+# Lid button device (in /proc/acpi/button/lid).
+lid_dev=LID
+
+percentage_low=10
+percentage_critical=5
+
+percentage_low_action='beep -f3000 -nf1000'
+percentage_critical_action='sudo pm-suspend'
+
+last_display_percentage=0
+
+# Title of this program, so we don't have to keep typing this
+# out in the notification bubbles, 'cause we're lazy.  :P
+title='Battery Monitor Daemon'
+
+#################
+### Functions ###
+#################
+battery () {
+  # Does the battery device exist?
+  if [ -d /proc/acpi/battery/$battery_dev ]; then
+    # Grab the information we need about power devices.
+    ac_adapter=`awk '/^state: / { print $2 }' /proc/acpi/ac_adapter/$ac_adapter_dev/state`
+    full_capacity=`awk '/^last full / { print $4 }' /proc/acpi/battery/$battery_dev/info`
+    current_capacity=`awk '/^remaining / { print $3 }' /proc/acpi/battery/$battery_dev/state`
+    percentage=$(((current_capacity * 100) / full_capacity))
+    lid_button=`awk '/^state: / { print $2 }' /proc/acpi/button/lid/$lid_dev/state`
+    
+    #echo "$percentage%, AC $ac_adapter"
+    # Pop up a display about how much battery power remains every five
+    # percent...
+    [ $((percentage % 5)) -eq 0 ] && {
+      # ...only if the percentage has really changed...
+      [ $last_display_percentage -ne $percentage ] && {
+        notify-send "$title" "Battery at $percentage%.  AC $ac_adapter."
+        scott battery at $percentage percent
+        # ...so we won't annoy the user with this more than one time.
+        last_display_percentage=$percentage
+      }
+    }
+   
+    # 
+    if [ "$ac_adapter" != 'on-line' ]; then
+      if [ $percentage -lt $percentage_low -a -z $flag_low ]; then
+        # Notify the user...
+        notify-send "$title" "Battery low.
+Battery is at $percentage%.  AC $ac_adapter."
+        # ...set a flag so that we know we've taken action...
+        flag_low=1
+        beep -f2000 -r5
+        scott battery low
+        # ...run the low action.
+        $percentage_low_action
+      elif [ $percentage -lt $percentage_critical -a -z $flag_critical ]; then
+        notify-send "$title" "Battery critical.  Suspending the machine...
+Battery is at $percentagek%.  AC $ac_adapter."
+        flag_critical=1
+        beep -f1000 -d50 -l50 -r5
+        scott battery is critical suspending machine
+        $percentage_critical_action
+      fi
+    else
+      # Unset flags if the AC adapter has been plugged in.
+      [ $flag_critical ] && unset flag_critical
+      [ $flag_low ] && unset flag_low
+    fi
+    
+    # Now, let's check to see if the AC adapter has been messed with
+    # since last check.
+    [ "$ac_adapter" != "$ac_adapter_laststate" -a "$lid_button" = 'open' ] && {
+      # If it was plugged in since last time...
+      if [ "$ac_adapter" = 'on-line' ]; then
+        # ...tell the user about it...
+        notify-send "$title" "AC adapter has been plugged in.
+Battery is at $percentage%.  AC $ac_adapter."
+        # ...turn up the display panel backlight...
+        #xbacklight -steps 1 -set 100
+        # ...tell X to wait longer before putting the display to sleep.
+        xset dpms 0 0 7200
+      else
+        notify-send "$title" "AC adapter has been removed.
+Battery is at $percentage%.  AC $ac_adapter."
+        #xbacklight -steps 1 -set 0
+        xset dpms 0 0 300
+      fi
+      # Remember what happened with the AC adapter.
+      ac_adapter_laststate="$ac_adapter"
+    }
+  else
+    #echo 'N/A'
+    notify-send "$title" 'No battery detected.'
+  fi
+}
+
+############
+### Main ###
+############
+battery
+[ "$1" = '-d' ] && {
+  shift
+  while :; do
+    sleep 15
+    battery
+  done
+}

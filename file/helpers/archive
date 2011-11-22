@@ -1,0 +1,34 @@
+#!/usr/bin/env python2
+import sys
+import os
+import fnmatch
+import subprocess
+
+if len(sys.argv) < 3:
+    sys.exit('Missing arguments. Syntax: ARCHIVE.TYPE FILE [FILE ...]')
+
+archive_handlers = {
+    'tar.bz2': ['tar', '-cjf'],
+    'tar.gz': ['tar', '-czf'],
+    'tar.lzma': ['tar', '--lzma', '-cf'],
+    'tar.xz': ['tar', '--xz', '-cf'],
+    'tar': ['tar', '-cf'],
+    '7z': ['7za', '-t7z', '-m0=lzma', '-mx=9', '-mfb=64', '-md=32m', '-ms=on'],
+    'bz2': ['bzip2', '--best'],
+    'gz': ['gzip', '--best'],
+    'rar': ['rar', '-m5'],
+    'tbz2': ['tar', '-cjf'],
+    'tgz': ['tar', '-czf'],
+    'tlzma': ['tar', '--lzma', '-cf'],
+    'txz': ['tar', '--xz', '-cf'],
+    'z': ['compress', '--best'],
+    'zip': ['zip', '-9']
+}
+
+for filetype, handler in archive_handlers.items():
+    if fnmatch.fnmatch(sys.argv[1].lower(), '*.' + filetype):
+        subprocess.call(handler + sys.argv[1:])
+        sys.exit()
+
+sys.exit('Archive type not recognized.')
+

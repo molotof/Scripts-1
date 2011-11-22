@@ -1,0 +1,19 @@
+#!/bin/bash
+library="${HOME}/Music/Library"
+playlists="${HOME}/Music/Playlists"
+trash="${HOME}/.local/Trash"
+song=$(mpc current -f '%file%')
+error () {
+    echo "${*}"
+    exit 1
+}
+
+syntax () {
+    error "Syntax: ${0##*/} ${*}"
+}
+
+notice () {
+    #notify-send -t 3000 "${0##0*/}" "${*}"
+    osd "${*}" &
+}
+

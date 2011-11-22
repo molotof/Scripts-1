@@ -1,0 +1,63 @@
+#!/bin/bash
+### MPlayer Tuner Helper #######
+# Version 0.2 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+chans="$HOME/.mplayer/channels.conf"
+prog=0
+cache=1
+restarts=0
+ts='[%d-%a-%y %H%M.%S]'
+lock='/tmp/tv.lock'
+DISPLAY=:0.0
+
+if [[ "$1" =~ ^-p ]]; then
+    prog=$1
+    prog=${prog:2}
+    shift
+fi
+
+channel=$(egrep -m1 -i "(^|:)$*($|:)" "$chans" | cut -d':' -f1)
+[[ -z "$channel" ]] && channel=$(egrep -m1 -i "$*" "$chans" | cut -d':' -f1)
+if [[ -z "$channel" ]]; then
+    echo 'Channel not found.'
+    exit 1
+fi
+
+trap "" USR1
+killall -w mplayer
+killall -USR1 ${0##*/}
+
+if $(echo "$channel" | grep -qi ' hd'); then
+    c="mplayer -cache-min $cache -lavdopts skipframe=nonref:skiploopfilter=all:fast=1:threads=2"
+else
+    c="mplayer -cache-min 0.$cache -lavdopts threads=2 -vf yadif=1"
+fi
+
+touch "$lock"
+for s in INT TERM USR1; do
+    trap "rm '$lock'; exit" INT
+done
+while :; do
+    $c -display :0.0 -tsprog "$prog" -cache 100000 -msglevel all=5 -nomsgcolor "dvb://$channel" 2>&1 | while read line; do
+        date +"$ts $line"
+        case "$line" in
+            *'Exiting'*)
+                rm "$lock"
+                break
+                ;;
+            *'frame sync error'|*'crashed'*)
+                sleep 1
+                date +"$ts Stream crapped out; restarting MPlayer."
+                if ((++restarts % 3 == 0 && cache < 9)); then
+                    date +'[%d-%a-%y %H:%M:%S] Increasing cache.'
+                    ((++cache))
+                fi
+                break
+                ;;
+        esac
+    done
+    killall -w mplayer
+    [[ ! -f "$lock" ]] && break
+done
+[[ $o ]] && kill $o &> /dev/null

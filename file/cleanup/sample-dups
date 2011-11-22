@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+### Sample Library Cleanup #####
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+import os
+import re
+import shutil
+import sys
+
+
+# Path to sample library.
+scanpath = os.path.join(os.path.expanduser('~'), 'Music', 'Samples', 'IT')
+
+
+def rate_match(match, name):
+    match = re.split(r'\W+|_', match)
+    name = re.split(r'\W+|_', name)
+    if match == name:
+        return float('-inf')
+    score = 0
+    combo = 0
+    for word in match:
+        if word in name:
+            score += 1 + 1000 * combo
+            combo += 1
+        else:
+            # C-C-C-Combo breaker!
+            combo = 0
+    return -score
+
+
+def similar(name, size, files, limit):
+    matches = [
+        f for f in files
+        if os.path.exists(os.path.join(scanpath, f[0])) \
+        and rate_match(name, f[0]) < 0
+    ]
+    # Secondary sort:  closest file size.
+    matches.sort(key=lambda f: abs(size - f[1]))
+    # Primary sort:  best-matching filename.
+    matches.sort(key=lambda f: rate_match(name, f[0]))
+    return matches[:limit]
+
+
+def match_prompt(name, size, filelist):
+    matches = similar(name, size, filelist, 31)
+    if len(matches) < 2:
+        return filelist, False
+    print("\n[0] {}: {}".format(name, size))
+    for index, match in enumerate(matches):
+        if index != 0:
+            print('    [{0}] {1[0]}: {1[1]}'.format(index, match))
+    while True:
+        choice = input('> ').strip()
+        try:
+            choice = int(choice)
+        except ValueError:
+            if choice == "":
+                return filelist, False
+            elif choice == 'q':
+                sys.exit(0)
+            else:
+                print('Invalid selection.')
+                continue
+        if choice < 0:
+            sys.exit(0)
+        elif choice <= len(matches):
+            f = matches[choice]
+            path = os.path.join(scanpath, f[0])
+            print('Delete: {}'.format(path))
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+                filelist.remove(f)
+            except (OSError, IOError, ValueError) as error:
+                print('An error occured: {}'.format(error))
+            return filelist, True
+        print('Invalid selection.')
+
+
+def prompt_matches(matches):
+    index = 0
+    while index < len(matches):
+        name, size = matches[index]
+        if os.path.exists(os.path.join(scanpath, name)):
+            dirs, reshow = match_prompt(name, size, matches)
+            if not reshow:
+                index += 1
+        else:
+            index += 1
+
+
+def main():
+    print('Scanning...')
+    rescan = False
+    files = []
+    dirs = []
+    for name in os.listdir(scanpath):
+        path = os.path.join(scanpath, name)
+        if os.path.isdir(path):
+            size = int(len(os.listdir(path)))
+            dirs.append((name, size))
+        else:
+            size = round(os.path.getsize(path) / 1024.0, 1)
+            files.append((name, size))
+    print("\n(-1 or q to quit; [Enter] to skip; 0 to delete original)")
+    prompt_matches(dirs)
+    prompt_matches(files)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

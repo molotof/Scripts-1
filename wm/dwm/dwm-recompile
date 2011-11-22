@@ -1,0 +1,10 @@
+#!/bin/dash
+cd ~/.dwm
+rm dwm
+if ! osd -bt0 -c yellow "Compiling DWM" | make; then
+    osd -b -t5 -v bottom -c red "DWM COMPILE ERROR" &
+    exit 1
+fi
+osd -t1 -v bottom "Successful"
+pkill -x dwm-$(hostname)
+cp dwm ~/bin/dwm-$(hostname)

@@ -1,0 +1,50 @@
+#!/bin/bash
+### Download to Dir by Type ####
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Depencencies:
+#   curl (MIME type detection)
+#   wget
+#
+c='curl -kLI --connect-timeout 10'
+w='wget -c -T15 -nc -E --content-disposition'
+
+shopt -s nocasematch    # So extension case won't matter.
+shopt -s extglob        # Enable extended globs in matching.
+
+for uri in "$@"; do
+    # Try to use file extension, first.
+    ftype=${uri##*.}
+    alt=0
+    echo 'Determining type...'
+    while [[ -z "$d" ]]; do
+        case "$ftype" in
+            @(txt|text|doc|xls|ppt|nfo|od?|htm)*|@(text|vnd)/*)
+                d=~/Documents
+                ;;
+            @(zip|tar|gz|bz2|xz|lzma|rar|Z)|*/*@(zip|tar))
+                d=~/Downloads/Archives
+                ;;
+            @(png|jpg|jpeg|tiff|gif|svg|xcf)|image/*)
+                d=~/Pictures
+                ;;
+            @(mpg|mpeg|mov|flv|mp4|avi|wmv|ogv)|video/*)
+                d=~/Videos
+                ;;
+            @(wav|mp3|flac|oga)|audio/*)
+                d=~/Music
+                ;;
+            *)
+                # If we couldn't figure out what type it was the first time
+                # around, let's try by MIME type.
+                t=$($c "$uri" | awk -F'(:|;) ' '/^Content-Type/{print $2}')
+                # If we've tried everything, the loop will get broken out of.
+                ((++alt == 2)) && d=~/Downloads
+                ;;
+        esac
+    done
+    mkdir -p "$d"
+    echo "Saving '$uri' to '$d'..."
+    $w -P "$d" "$uri"
+done

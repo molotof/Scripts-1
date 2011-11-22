@@ -1,0 +1,16 @@
+#!/bin/bash
+. mpc-common
+[[ -z "${1}" ]] && syntax 'playlist'
+while read file; do
+    file=$(readlink -f "${file}")
+    for playlist in "${@}"; do
+        echo "${file}" >> "${playlists}/${playlist}.m3u"
+        sort -u "${playlists}/${playlist}.m3u" -o "${playlists}/${playlist}.m3u"
+    done
+    song=${song##*/}
+    [[ ${#song} -gt 20 ]] && song="${song:0:20}..."
+    notice "${file} added to:\n$(for playlist in "${@}"; do
+        [[ ${#playlist} -gt 20 ]] && playlist="${playlist:0:20}..."
+        echo "${playlist}"
+    done)"
+done < /dev/stdin

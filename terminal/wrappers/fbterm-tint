@@ -1,0 +1,26 @@
+#!/bin/bash
+### Set Fbterm BG with Tint ####
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Based on: fbterm-bi          #
+################################
+# Dependencies:
+# - ImageMagick (tinting)
+#
+img="$HOME/.background"
+for f in defaults resources; do
+    [[ -f ~/.X$f ]] && tint=$(awk '/shading/{print $2}' ~/.X$f)
+    [[ "$tint" ]] && break || tint=100
+done
+clear
+if which convert &> /dev/null && [[ -f "$img" ]]; then
+    convert "$img" -fill black -colorize $((100 - tint)) "$img.fbterm"
+    img+=".fbterm"
+fi
+fbv -ciuker "$img" << EOF
+q
+EOF
+export FBTERM_BACKGROUND_IMAGE=1
+exec /usr/bin/fbterm "$@"
+

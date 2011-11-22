@@ -1,0 +1,6 @@
+#!/bin/bash
+cd ~/.dwm
+rm -r orig
+hg clone http://hg.suckless.org/dwm orig
+cp orig/* .
+

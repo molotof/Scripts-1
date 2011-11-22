@@ -1,0 +1,34 @@
+#!/bin/bash
+### Musca Fullscreen Mode ######
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+pidfile="$HOME/.config/musca/fullscreen.pid"
+pid=$(pidof musca)
+[[ -z "$pid" ]] && exit 1
+if [[ -f "$pidfile" ]]; then
+    oldpid=$(grep -m1 '[0-9]\+' "$pidfile")
+    if [[ "$oldpid" != "$pid" ]]; then
+        rm -f "$pidfile"
+        exec $0
+    fi
+    musca -c 'silent pad 0 0 15 15'
+    musca -c 'silent hook off ^(add|use)'
+    musca -c 'silent hook on ^(add|use) pad 0 0 15 15'
+    musca -c 'silent border on'
+    musca-xmobar
+    feh --bg-fill "$HOME/.background"
+    xrefresh
+    rm -f "$pidfile"
+else
+    killall musca-xmobar xmobar
+    musca -c 'silent pad 0 0 0 0'
+    musca -c 'silent hook off ^(add|use)'
+    musca -c 'silent hook on ^(add|use) pad 0 0 0 0'
+    musca -c 'silent border off'
+    xsetroot -solid black
+    xrefresh
+    echo "$pid" > "$pidfile"
+fi
+

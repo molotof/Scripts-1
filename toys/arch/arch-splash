@@ -1,0 +1,3 @@
+#!/bin/bash
+(sleep 6; killall mplayer; killall mplayer) &
+mplayer -really-quiet -rootwin "$HOME/Videos/Random/Rio6000 - Arch Linux Animation.flv"

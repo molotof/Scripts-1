@@ -1,0 +1,23 @@
+#!/bin/bash
+### Cyclic XMobar MPD Info #####
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+max_width=40
+
+get_track () {
+    track=$(mpc -f '[%artist%, ]"%title%"' current)
+}
+set -f
+while :; do
+    ((tick++ % 5 == 0)) && get_track
+    if [[ ${#track} -gt ${max_width} ]]; then
+        offset=$((SECONDS * 2 % (${#track} + 4)))
+        track="  ${track}$(printf "%${#track}s")  "
+        track=${track:offset}
+        track=${track:0:max_width}
+    fi
+    echo "MPD: <fc=#EEA>${track}</fc>"
+    sleep 1
+done
+

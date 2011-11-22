@@ -1,0 +1,19 @@
+#!/bin/bash
+. mpc-common
+if [[ "${1}" != '--scrobble' ]]; then
+    killall mpdscribble &> /dev/null
+else
+    shift
+    pidof mpdscribble || mpdscribble &> /dev/null
+fi
+[[ -z "${1}" ]] && syntax "playlist [playlist ...]"
+mpc -q stop
+mpc -q clear
+for playlist in "$@"; do
+    mpc -q load "${playlist}"
+done
+mpc play
+notice "Loaded playlist(s):\n$(for playlist in "$@"; do
+    [[ ${#playlist} -gt 20 ]] && playlist="${playlist:0:20}..."
+    echo "${playlist}"
+done)"

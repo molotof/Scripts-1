@@ -1,0 +1,9 @@
+#!/bin/bash
+a=`mpc --format "[%artist%]" | head -1`
+t=`mpc --format "[%title%|Unknown Title]" | head -1`
+
+[[ "$a" ]] &&
+[[ "${a#${a%?}}" == 's' || "${a#${a%?}}" == 'S' ]] && a="$a' " || a="$a's "
+[[ ! '!.?"' =~ "${t#${t%?}}" ]] && t="$t."
+
+mpc --format "MPD is playing $a\"$t\"" | head -1

@@ -1,0 +1,11 @@
+#!/bin/bash
+. mpc-common
+[[ -z "${song}" ]] && exit 1
+[[ $song =~ '.zip/' ]] && song=${song%/*}
+mpc del 0
+mkdir -p "${trash}"
+mv "${library}/${song}" "${trash}"
+mpc update
+song=${song##*/}
+[[ ${#song} -gt 20 ]] && song="${song:0:20}..."
+notice "${song}\nmoved to trash."

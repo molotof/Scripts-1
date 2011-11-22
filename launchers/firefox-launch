@@ -1,0 +1,28 @@
+#!/bin/bash
+### Firefox Launcher ###########
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+profiles="$HOME/.mozilla/firefox"
+dm="dmenu -i $DMENU_OPTIONS"
+if tty &> /dev/null && [[ "$TERM" != 'dumb' ]]; then
+    if which 'slmenu' &> /dev/null; then
+        dm='slmenu -i'
+    fi
+elif [[ -z "$DISPLAY" ]]; then
+    exit 1
+fi
+
+launch () {
+    export TERM='dumb'
+    unset PS1
+    $* </dev/null &>/dev/null & disown
+}
+
+profile=$(find "$profiles" -maxdepth 1 -type d -printf '%P\n' | grep '.\+\.' |
+          cut -d'.' -f2 | sort | $dm -p 'Open Firefox profile:')
+[[ -z "$profile" ]] && exit
+killall -w firefox-bin
+launch firefox -P "$profile" "$*"
+

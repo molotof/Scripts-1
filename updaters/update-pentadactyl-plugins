@@ -1,0 +1,19 @@
+#!/bin/bash
+plugins=(
+    #'http://dactyl.sourceforge.net/plugins/browser-improvements-dev.js'
+    #'http://dactyl.sourceforge.net/plugins/curl-dev.js'
+    #'http://dactyl.sourceforge.net/plugins/fix-focus-dev.js'
+    'http://dactyl.sourceforge.net/plugins/http-headers-dev.js'
+    #'http://dactyl.sourceforge.net/plugins/jscompletion-dev.js'
+    #'http://dactyl.sourceforge.net/plugins/noscript-dev.js'
+    #'http://dactyl.sourceforge.net/plugins/smooth-scroll-dev.js'
+    'http://dactyl.sourceforge.net/plugins/tab-options-dev.js'
+    'http://dactyl.sourceforge.net/plugins/useragent-dev.js'
+    'https://raw.github.com/grassofhust/buftabs/master/buftabs.js'
+    #'https://raw.github.com/maksimr/firebug-pentadactyl/master/firebug.js'
+)
+
+for plugin in ${plugins[@]}; do
+    wget -t3 -T10 -w5 -O "$HOME/.pentadactyl/plugins/${plugin##*/}" "${plugin}"
+done
+

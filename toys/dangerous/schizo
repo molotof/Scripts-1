@@ -1,0 +1,19 @@
+#!/bin/bash
+## Bashful Schizophrenic ##
+# A poem by Scott Garrett #
+###########################
+
+for hallucinations in pretty kaleidoscopic images, \
+luminous lights dancing -- \
+9 dancing beasts amongst shattered heads...
+do I_hear=${hallucinations/dancing/ }$?
+while [[ $I_hear ]]
+do they_know=${I_hear:0:1}
+$it break #?
+let it be; done
+who hides inside;
+who is whispering?
+clear the voices --
+voices+=$they_know
+$and let it be what is now; done
+$and $(echo $the $voices $of $death) & disown > self

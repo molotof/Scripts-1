@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+import sys
+
+
+def main():
+    string = ' '.join(sys.argv[1:])
+    msg = 'String: «{}»: {}'
+    hexstr = ' '.join([hex(ord(char))[2:] for char in string])
+    print(msg.format(string, hexstr))
+
+
+if __name__ == '__main__':
+    main()

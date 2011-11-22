@@ -1,0 +1,52 @@
+#!/bin/bash
+### Service Manager ############
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+if [[ $UID != 0 ]]; then
+    echo 'Must be root to use this utility.'
+    exit 1
+elif [[ -z $2 ]]; then
+    echo "Usage:  ${0##*/} (stop|start|restart) [daemon]"
+    exit 1
+fi
+a=$1
+shift
+while [[ $1 ]]; do
+    d=$1
+    case $(</proc/1/comm) in
+        systemd)
+            systemctl $a $d.service
+            if [[ $? -ne 0 ]]; then
+                systemctl daemon-reload
+                systemctl $a $d.service
+            fi
+            ;;
+        upstart)
+            service $d $a
+            ;;
+        rinit)
+            sv $a $d
+            ;;
+        init)
+            for s in {rc,init}{.d,}; do
+                [[ -f /etc/$s/$d ]] && /etc/$s/$d $a
+            done
+            ;;
+        *)
+
+            if [[ $a == @(stop|restart) ]]; then
+                killall $d
+                for i in {0..5}; do
+                    pidof $d &>/dev/null || break
+                done
+                [[ $? -eq 0 ]] && killall -9 $d
+            fi
+            if [[ $a == @(start|restart) ]]; then
+                pidof $d &>/dev/null || $d -D
+            fi
+            ;;
+    esac
+    [[ $? -ne 0 ]] && echo "FATAL:  Could not $a $d service."
+    shift
+done

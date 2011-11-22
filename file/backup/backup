@@ -1,0 +1,27 @@
+#!/bin/bash
+backup_host='root@tarot'
+backup_root='/home/backup'
+exclude='/dev/shm/rsync-excludes.rc'
+excludes=(
+    'tmp/*'                     # Temp files.
+    'tmp/.*'                    # Hidden temp files.
+    'home/tmp/*'
+    'home/var-tmp/*'
+    '*~'                        # Backup/temp files.
+    'home/wintervenom/*'
+    'home/wintervenom/.*'
+)
+
+echo > /tmp/rsync-excludes.rc
+for file in ${excludes[@]}; do
+    echo "$file" >> "$exclude"
+done
+rsync -e ssh -alxh --progress --delete --delete-excluded --exclude-from="$exclude" / "$backup_host:$backup_root/$HOSTNAME"
+ssh $backup_host mkdir -p "$backup_root/$HOSTNAME/"{dev,sys,proc,tmp,mnt,media,var/{tmp,lock}}
+ssh $backup_host chown root:root "$backup_root/$HOSTNAME/"{dev,sys,proc,tmp,mnt,media,var/{tmp,lock}}
+ssh $backup_host chmod 1777 "$backup_root/$HOSTNAME/"{tmp,var/{tmp,lock}}
+
+pacman -Qqe | grep -v "$(pacman -Qmq)" > /tmp/pacman.list
+scp /tmp/pacman.list "$backup_host:$backup_root/$HOSTNAME/pacman.list"
+rm /tmp/pacman.list
+

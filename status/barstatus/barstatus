@@ -1,0 +1,106 @@
+#!/bin/bash
+### Statusbar Output ###########
+# Version 0.4 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+###############
+### Globals ###
+###############
+battery_dev=$(ls /proc/acpi/battery | head -1)
+ac_adapter_dev=$(ls /proc/acpi/ac_adapter | head -1)
+
+load_delay=1
+memory_delay=1
+battery_delay=6
+wlan_delay=1
+
+load_timer=0
+memory_timer=0
+battery_timer=5
+wlan_timer=0
+
+############
+### Main ###
+############
+set -f
+set -o pipefail
+
+sleep 3
+while :; do
+    #System Load
+    ((load_timer++ == 0)) &&
+        load_stat=$(cut -d' ' -f1 /proc/loadavg)
+
+    #Memory
+    ((memory_timer++ == 0)) &&
+        memory_stat=$(free -m | awk '/cache:/{print $3}')
+
+    #Battery
+    if ((battery_timer++ == 0)); then
+        if [[ -d /proc/acpi/battery/$battery_dev ]]; then
+            ac_adapter=$(acpi -a | cut -d' ' -f3)
+            battery_stat=$(acpi -b | cut -d' ' -f4 | tr -d '%,')
+            if [[ "$ac_adapter" != 'on-line' ]]; then
+                if [[ ${battery_stat:0:1} -ne $flag_battstat ]]; then
+                    flag_battstat=${battery_stat:0:1}
+                elif [[ $battery_stat -lt 20 && -z $flag_warning ]]; then
+                    flag_warning=1
+                elif [[ $battery_stat -lt 6 && -z $flag_pmsuspend ]]; then
+                    flag_pmsuspend=1
+                fi
+            else
+                [[ $flag_pmsuspend ]] && unset flag_pmsuspend
+                [[ $flag_warning ]] && unset flag_warning
+            fi
+        else
+            battery_stat='N/A'
+        fi
+    fi
+
+    #Wireless
+    if ((wlan_timer++ == 0)); then
+        IFS=$'\n' info=($(iw wlan0 link | grep -i '^\ss' | cut -d' ' -f2))
+        if [[ "$info" ]]; then
+            wlan_stat="$info (${info[1]}dB)"
+            if [[ -z $flag_connected ]]; then
+                addr=($(ifconfig wlan0 | egrep -o '([0-9]{1,3}(\.|\b)){4}'))
+                if [[ -z ${addr[0]} ]]; then
+                    wlan_stat+=' [Requesting address...]'
+                    if [[ -z $flag_request ]]; then
+                        flag_request=1
+                    fi
+                else
+                    wlan_stat+=" [IP: ${addr[0]} / Gateway: ${addr[2]}]"
+                    flag_connected=1
+                    unset flag_request
+                    #if ping -q -c1 -W10 google.com; then
+                    #    if [[ -z $flag_internet ]]; then
+                    #        flag_internet=1
+                    #    fi
+                    #else
+                    #    if [[ $flag_internet ]]; then
+                    #        unset flag_internet
+                    #    fi
+                    #fi
+                fi
+            fi
+        else
+            wlan_stat='offline'
+            if [[ $flag_connected ]]; then
+                unset flag_connected flag_internet flag_request addr
+            fi
+        fi
+    fi
+
+    #Timers
+    ((load_timer == load_delay)) && load_timer=0
+    ((memory_timer == memory_delay)) && memory_timer=0
+    ((battery_timer == battery_delay)) && battery_timer=0
+    ((wlan_timer == wlan_delay)) && wlan_timer=0
+
+    stats="SYS: $load_stat    MEM: ${memory_stat}M    BAT: ${battery_stat}%    NET: ${wlan_stat}   $(date +'%a %d%m:%H%M')" || exit
+    echo "$stats"
+    xsetroot -name "$stats"
+    sleep 5
+done
