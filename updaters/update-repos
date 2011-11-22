@@ -79,6 +79,7 @@ scripts=(
     firefox-launch,$r_bin/launchers
     launch,$r_bin/launchers
     mupen-launch,$r_bin/launchers
+    qemu-launch,$r_bin/launchers
     uri-open,$r_bin/launchers
 
 
@@ -165,9 +166,9 @@ scripts=(
 
 
 declare -A redact
-redact["$repos/$r_cfg/mpd/mpd.conf"]='(password +").*(")'
-redact["$repos/$r_cfg/newsbeuter/config"]='((login|password) +").*(")'
-redact["$repos/$r_cfg/mutt/.muttrc"]='((_pass|_url|_user|realname).+").*(")'
+redact["$repos/$r_cfg/mpd/mpd.conf"]='(password +)".*'
+redact["$repos/$r_cfg/newsbeuter/config"]='((login|password) +)".*'
+redact["$repos/$r_cfg/mutt/.muttrc"]='((_pass|_url|_user|realname) *= *)".*'
 
 
 sync () {
@@ -178,7 +179,7 @@ sync () {
 
 sanitize () {
     for file in "${!redact[@]}"; do
-        sed -ri 's#'"${redact[$file]}"'#\1[redacted]\2#' $file
+        sed -ri 's#'"${redact[$file]}"'#\1[redacted]#' $file
     done
 }
 
