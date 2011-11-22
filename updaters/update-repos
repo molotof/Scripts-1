@@ -55,14 +55,16 @@ scripts=(
 
 
 
+    dl,$r_bin/network/downloaders
+    vkdl,$r_bin/network/downloaders
+
+
+
     backup,$r_bin/file/backup
     backup-system,$r_bin/file/backup
 
     sample-dups,$r_bin/file/cleanup
     superclean,$r_bin/file/cleanup
-
-    dl,$r_bin/file/handlers
-    uri-open,$r_bin/file/handlers
 
     archive,$r_bin/file/helpers
     extract,$r_bin/file/helpers
@@ -77,6 +79,7 @@ scripts=(
     firefox-launch,$r_bin/launchers
     launch,$r_bin/launchers
     mupen-launch,$r_bin/launchers
+    uri-open,$r_bin/launchers
 
 
 
