@@ -1,0 +1,22 @@
+#!/bin/bash
+cpu_model=`uname -p`
+cpu_num=`grep -c "model name" /proc/cpuinfo`
+cpu_article='a'
+cpu_suffix=''
+cpu_speeds=`grep 'cpu MHz' /proc/cpuinfo | sed 's:[^0-9.]::g' | awk '{printf $0 " and "}' | sed 's: and $: MHz:'`
+cpu_temp=`acpi -t | awk '{print $4}'`
+if [[ /etc/os-release ]]; then
+    . /etc/os-release
+    distro=${NAME/ Linux/}
+else
+    distro=`find /etc -type f -name "*-release" -printf '%f\n' 2>/dev/null | awk '{sub(/-release/, "", $0); $0 = toupper(substr($0, 1, 1)) substr($0, 2); print $0}'`
+fi
+
+[[ "AEIOUaeiou" =~ ${cpu_model:0:1} ]] && cpu_article='an'
+(( cpu_num > 1 )) && cpu_suffix='s'
+n () {
+    number $1 | sed 's/.$//'
+}
+
+
+echo "This machine has $cpu_article $cpu_model processor with $(n $cpu_num) core$cpu_suffix running at $(n $cpu_temp) °C, clocked at $cpu_speeds.  It runs $distro $(uname -s) with a $(uname -rm) kernel."

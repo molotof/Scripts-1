@@ -1,0 +1,104 @@
+#!/bin/bash
+### Simple QEMU Launcher #######
+# Version 0.1 by Scott Garrett #
+# Wintervenom [[(at)]] gmail.com #
+################################
+
+###############
+### Globals ###
+###############
+dir_vm=$(dirname "$0")
+dir_hds="$dir_vm/Disks"
+dir_cds="$HOME/Archive/Disks"
+
+
+#####################
+### Configuration ###
+#####################
+#arch='i386'
+ram_size='1024M'
+smp=1
+
+boot='d'
+
+hda="$dir_hds/${0##*/}.qcow2"
+#hda_index='0'
+#hda_type='disk'
+hda_opts='cache=writeback,if=virtio'
+
+#hdb=""
+#hdb_index='1'
+#hdb_type='disk'
+#hdb_opts=''
+
+#hdc="$dir_cds/path_to.iso"
+hdc="/dev/sr0"
+#hdc_index='2'
+hdc_type='cdrom'
+#hdc_opts=''
+
+#hdd=""
+#hdd_index='3'
+#hdd_type='disk'
+#hdd_opts=''
+
+network_a='user,vlan=1'
+#network_a='nic,model=virtio'
+#network_b='user,vlan=1'
+usb='1'
+#usb_dev=""
+hw_audio='ac97'
+#fullscreen='1'
+#extra_opts=''
+
+#################
+### Execution ###
+#################
+qemu_args=''
+
+[[ "$ram_size" ]] && qemu_args+="-m $ram_size "
+[[ "$smp" ]] && qemu_args+="-smp $smp "
+
+[[ "$boot" ]] && qemu_args+="-boot $boot "
+
+[[ "$fda" ]] && qemu_args+='-fda "'"$fda"'" '
+[[ "$fdb" ]] && qemu_args+='-fdb "'"$fdb"'" '
+
+[[ "$hda_index" ]] && hda_index="index=$hda_index,"
+[[ "$hda_type" ]] && hda_type="media=$hda_type,"
+[[ "$hda_opts" ]] && hda_opts+=','
+[[ "$hda" ]] && qemu_args+="-drive file=${hda},${hda_opts}${hda_index}${hda_type} "
+
+[[ "$hdb_index" ]] && hdb_index="index=$hdb_index,"
+[[ "$hdb_type" ]] && hdb_type="media=$hdb_type,"
+[[ "$hdb_opts" ]] && hdb_opts+=','
+[[ "$hdb" ]] && qemu_args+="-drive file=${hdb},${hdb_opts}${hdb_index}${hdb_type} "
+
+[[ "$hdc_index" ]] && hdc_index="index=$hdc_index,"
+[[ "$hdc_type" ]] && hdc_type="media=$hdc_type,"
+[[ "$hdc_opts" ]] && hdc_opts+=','
+[[ "$hdc" ]] && qemu_args+="-drive file=${hdc},${hdc_opts}${hdc_index}${hdc_type} "
+
+[[ "$hdd_index" ]] && hdd_index="index=$hdd_index,"
+[[ "$hdd_type" ]] && hdd_type="media=$hdd_type,"
+[[ "$hdd_opts" ]] && hdd_opts+=','
+[[ "$hdd" ]] && qemu_args+="-drive file=${hdd},${hdd_opts}${hdd_index}${hdd_type} "
+
+[[ "$network_a" ]] && qemu_args+="-net $network_a "
+[[ "$network_b" ]] && qemu_args+="-net $network_b "
+[[ "$usb" ]] && qemu_args+='-usb '
+[[ "$usb_dev" ]] && qemu_args+='-usbdevice "'"$usb_dev"'" '
+[[ "$hw_audio" ]] && qemu_args+="-soundhw $hw_audio "
+[[ "$fullscreen" ]] && qemu_args+='-full-screen '
+[[ "$extra_opts" ]] && qemu_args+="$extra_opts"
+
+[[ "$1" = '--args' ]] && {
+  echo $qemu_args
+  exit
+}
+
+if [[ "$arch" = "x86_64" ]]; then
+  qemu-system-x86_64 $qemu_args $@
+else
+  qemu $qemu_args $@
+fi

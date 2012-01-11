@@ -1,0 +1,63 @@
+#!/bin/bash
+### Mupen64 Launcher ###########
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+
+roms="$HOME/Programs/Games/N64/ROMs"
+datadir="$HOME/.local/share/mupen64plus"
+cachedir="$HOME/.cache/mupen64-launch"
+cache="$cachedir/cache"
+hist="$cachedir/history"
+dm="dmenu -i $DMENU_OPTIONS"
+if tty &> /dev/null && [[ "$TERM" != 'dumb' ]]; then
+    if which 'slmenu' &> /dev/null; then
+        dm='slmenu -i'
+    fi
+elif [[ -z "$DISPLAY" ]]; then
+    exit 1
+fi
+
+
+build_menu () {
+    mkdir -p "$cachedir"
+    if [[ ! -f "$cache" ]]; then
+        find "$roms" -type f -name "*.?64*" -printf '%P\n' | sort > "$cache"
+    fi
+    cat "$cache"
+}
+
+update_history () {
+    (echo "$1"; head -9 "$hist" | grep -Fvx "$1") > "$hist.new"
+    mv "$hist"{.new,}
+}
+
+build_hist_menu () {
+    mkdir -p "${hist%/*}"
+    touch "$hist"
+    menu_items=$(build_menu)
+    hist_items=$(grep -Fx "$(echo "$menu_items")" "$hist")
+    echo "$hist_items" > "$hist"
+    if [[ ${#hist_items} > 1 ]]; then
+        echo "$hist_items"
+        echo "$menu_items" | grep -Fvx "$hist_items"
+    else
+        echo "$menu_items"
+    fi
+}
+
+rom=$(build_hist_menu | $dm -p 'Launch N64 ROM:')
+[[ -z "$rom" ]] && exit
+update_history "$rom"
+if [[ "$rom" == *.@(zip|ZIP) ]]; then
+    mkdir -p "$cachedir"
+    unzip -juo "$roms/$rom" -d "$cachedir"
+    roms=$cachedir
+    rom=${rom%*.zip}
+fi
+if [[ ! -d "$datadir" ]]; then
+    mkdir -p "$datadir"/{save,screenshot}
+    cp "/usr/share/mupen64plus"/* "$datadir"
+fi
+mupen64plus --datadir "$datadir" $* "$roms/$rom"
+rm -f "$cachedir"/*.?64

@@ -1,0 +1,4 @@
+#!/bin/bash
+export TERM='dumb'
+unset PS1
+"$@" </dev/null &>/dev/null & disown

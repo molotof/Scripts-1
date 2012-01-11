@@ -102,6 +102,10 @@ while :; do
         -option 'grp:shift_caps_toggle' -option 'keypad:pointerkeys'
     xbindkeys
     syndaemon -d -t -i2
+    synclient CornerCoasting=1
+    synclient VertTwoFingerScroll=1
+    synclient HorizTwoFingerScroll=1
+    synclient TrackstickSpeed=40
     dunst $DMENU_OPTIONS &
     case "$wm" in
         'musca')
