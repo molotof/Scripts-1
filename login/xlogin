@@ -1,5 +1,0 @@
-#!/bin/bash
-# TODO: Confirm re-entry.
-while :; do
-    /bin/bash -l -c xinit >/dev/null 2>&1
-done
