@@ -1,0 +1,31 @@
+#!/bin/bash
+basename=${0##*/}
+plugins=(
+http://www.weechat.org/files/scripts/beep.pl
+http://www.weechat.org/files/scripts/buffer_autoclose.py
+http://www.weechat.org/files/scripts/grep.py
+http://www.weechat.org/files/scripts/highmon.pl
+http://www.weechat.org/files/scripts/nickregain.pl
+http://www.weechat.org/files/scripts/screen_away.py
+http://www.weechat.org/files/scripts/shell.py
+http://www.weechat.org/files/scripts/urlgrab.py
+http://www.weechat.org/files/scripts/toggle_nicklist.py
+)
+
+for plugin in ${plugins[@]}; do
+    case "${plugin##*.}" in
+        'py')
+            plang='python' ;;
+        'pl')
+            plang='perl'   ;;
+        'lua')
+            plang='lua'    ;;
+    esac
+    if [[ ${plang} ]]; then
+        wget -t3 -T10 -w5 -O "${HOME}/.weechat/${plang}/autoload/${plugin##*/}" "${plugin}"
+    else
+        echo "${basename}: Plugin '${plugin}' is not supported."
+    fi
+    shift
+done
+

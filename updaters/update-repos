@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+### Update Local trees #############
+# Ver. 20120207-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us  #
+####################################
+
+import glob
+import os
+import shutil
+import sys
+import subprocess
+
+
+root_dir = os.path.join(os.path.expanduser('~'), 'Projects')
+tree = {
+    'Configs': {
+        'audio': {
+            'mpd': (
+                ('.config/mpd/mpd.conf', '(password +).*'),
+            ),
+        },
+        'client': {
+            'newsbeuter': (
+                ('.config/newsbeuter/config', '((?:login|password) +).*')
+            ),
+            'mutt': (
+                ('.muttrc', '((?:_pass|_url|_user|realname) *= *).*'),
+            ),
+            'rtorrent': (
+                '.rtorrent.rc',
+            ),
+        },
+        'file': {
+            'ranger': (
+                '.config/ranger/rc.conf',
+                '.config/ranger/apps.py',
+                '.config/ranger/options.py',
+            ),
+        },
+        'shell': {
+            'bash': (
+                '.bashrc',
+            ),
+        },
+        'status': {
+            'i3status': (
+                '.config/i3status/config',
+            ),
+            'xmobar': (
+                '.config/xmobar/*',
+            ),
+        },
+        'text': {
+            'vim': (
+                '.config/.vimrc',
+            ),
+            'zathura': (
+                '.config/zathura/zathurarc',
+            ),
+        },
+        'video': {
+            'mplayer': (
+                '.mplayer/*',
+            ),
+        },
+        'web': {
+            'pentadactyl': (
+                '.pentadactylrc',
+            ),
+        },
+        'wm': {
+            'openbox': (
+                '.config/openbox/*',
+            ),
+            'dwm': (
+                '.config/.dwm/config.h',
+            ),
+            'herbstlufwm': (
+                '.config/herbstluftwm/autostart',
+                '.config/herbstluftwm/layouts',
+            ),
+            'i3': (
+                '.config/i3/config',
+            ),
+        },
+        'x11': (
+            '.xbindkeys',
+            '/etc/X11/xorg.conf',
+            '.Xdefaults',
+            '.fonts.conf',
+        ),
+    },
+    'Scripts': {
+        'audio': {
+            'alsa': (
+                'bin/volume',
+            ),
+            'mpd': {
+                '': (
+                    'bin/dmpc',
+                    'bin/np',
+                ),
+                'mpc-utils': (
+                    'bin/mpc-*',
+                ),
+                'relevant-track': (
+                    'bin/relevant-track',
+                    'bin/relevant-track-np',
+                    'bin/relevant-track-weechat',
+                ),
+            },
+        },
+        'network': {
+            'downloaders': (
+                'bin/dl',
+                'bin/vkdl',
+                'bin/ytdl',
+            ),
+        },
+        'file': {
+            'backup': (
+                'bin/backup',
+                'bin/backup-system',
+            ),
+            'cleanup': (
+                'bin/sample-dups',
+                'bin/superclean',
+            ),
+            'helpers': (
+                'bin/archive',
+                'bin/extract',
+            ),
+            'organizers': (
+                'bin/organize-by-*',
+            ),
+            'launchers': (
+                'bin/dmenu-launch',
+                'bin/firefox-launch',
+                'bin/launch',
+                'bin/mupen-launch',
+                'bin/qemu-launch',
+                'bin/uri-open',
+                'bin/ytdl-mplayer',
+            ),
+        },
+        'login': (
+            'bin/login-action-menu',
+            'bin/resume-screen',
+            'bin/wm-session-manager',
+            'bin/xlogin',
+        ),
+        'status': {
+            '': (
+                'bin/battery-monitor',
+                'bin/osd',
+            ),
+            'barstatus': (
+                'bin/barstatus',
+                'bin/barstatus-*',
+            ),
+            'human-sysinfo': (
+                'bin/human-*info',
+            ),
+            'xmobar': (
+                'bin/xmobar-np-mpd',
+                'bin/xmobar-wireless-info',
+            ),
+        },
+        'utils': {
+            'system': (
+                'bin/rc',
+                'bin/zimage-extract',
+            ),
+            'text': (
+                'bin/tohex',
+                'bin/urldecode',
+                'bin/urlencode',
+            ),
+        },
+        'toys': {
+            '': (
+                'bin/lottery',
+                'bin/lucid',
+                'bin/random-word',
+                'bin/self-pong',
+                'bin/tclock',
+            ),
+            'arch': (
+                'bin/arch-splash',
+                'bin/archlogo',
+            ),
+            'dangerous': (
+                'bin/schizo',
+            ),
+        },
+        'terminal': {
+            'colorscheme-generator': (
+                'bin/bg-scheme',
+                'bin/term-color-generator',
+            ),
+            'tests': (
+                'bin/colorblocks',
+                'bin/colorcodes',
+            ),
+            'wrappers': (
+                'bin/fbterm-tint',
+            ),
+        },
+        'updaters': (
+            'bin/update-*',
+        ),
+        'video': {
+            'tv': (
+                'bin/tv',
+                'bin/tv-scan',
+            ),
+        },
+        'wm': {
+            'dwm': (
+                'bin/dwm-recompile',
+                'bin/dwm-session',
+                'bin/dwm-update',
+            ),
+        },
+        'herbstluftwm': (
+            'bin/hlwm-*',
+        ),
+    },
+}
+
+
+def redact(path, regex):
+    """
+    Call to `sed` to redact passwords and whatnot.  I'm too much of a lazy
+    mo'fo at the moment to implement this in Python.
+    """
+    return subprocess.call(['sed', '-ri', r's/{}/\1[redacted]/'.format(regex),
+                           path])
+
+
+def copy(source, dest):
+    """
+    Copies <source> to <dest>, creating directories if need be.
+    """
+    try:
+        if not os.path.exists(dest):
+            os.makedirs(dest)
+        dest = os.path.join(dest, os.path.basename(source))
+        if os.path.isdir(source):
+            shutil.copytree(source, dest)
+        else:
+            shutil.copy2(source, dest)
+        return dest
+    except (IOError, OSError, os.error) as err:
+        print('{} -> {}'.format(source, dest))
+        print("\tERROR: {}".format(str(err)))
+
+
+def list_tree(tree, root):
+    """
+    A generator to traverse the repo structure dict above, putting together
+    the paths along the way.
+    """
+    if not isinstance(tree, dict):
+        for path in tree:
+            redact_re = None
+            if not isinstance(path, str):
+                path, redact_re = path
+            if not path.startswith('/'):
+                path = os.path.join(os.path.expanduser('~'), path)
+            for path in glob.glob(path):
+                yield (path, root, redact_re)
+        return
+    for directory, contents in tree.items():
+        for item in list_tree(contents, os.path.join(root, directory)):
+            yield item
+
+
+def main():
+    """
+    Unadulterated laziness.  This is way simpler than checking everything for
+    an update (since we have to possibly redact things, anyway).  It's still
+    fast on Ext4 and any of the other cool FSes with delayed allocation.
+    """
+    print("Clearing old repo trees...")
+    for directory in tree.keys():
+        for path in glob.glob(os.path.join(root_dir, directory, '*')):
+            if os.path.isdir(path):
+                shutil.rmtree(path, True)
+
+    print("Copying files to repo trees...")
+    for path, root, redact_re in list_tree(tree, root_dir):
+        new_path = copy(path, root)
+        if redact_re:
+            redact(new_path, redact_re)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,19 @@
+#!/bin/bash
+((UID != 0)) && exit 1
+rm -f /tmp/hosts &>/dev/null
+sed -i '/\#START HOSTS APPEND/,/#END HOSTS APPEND/d' /etc/hosts
+urls=('http://www.mvps.org/winhelp2002/hosts.txt')
+echo 'Downloading blacklists...'
+for url in "${urls[@]}"; do
+    echo -n "  $url ..."
+    wget -cq -T30 "$url" -O- >> /tmp/hosts &&
+        echo ' okay.' ||
+        echo ' FAILED.'
+done
+echo "#START HOSTS APPEND" >> /etc/hosts
+cat /tmp/hosts | grep '^127' |
+    sed 's/^127\.0\.0\.1\s*/0.0.0.0 /g; s/ #.*//; s/\x0D$//' |
+    sort -u >> /etc/hosts
+echo "#END HOSTS APPEND" >> /etc/hosts
+rm /tmp/hosts
+
