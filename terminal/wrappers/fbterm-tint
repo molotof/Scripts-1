@@ -23,4 +23,3 @@ q
 EOF
 export FBTERM_BACKGROUND_IMAGE=1
 exec /usr/bin/fbterm "$@"
-
