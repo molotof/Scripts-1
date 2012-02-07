@@ -9,3 +9,9 @@ echo "$head" >> $file
 term-color-generator "$image" >> $file
 echo "$tail" >> $file
 
+case "$WINDOW_MANAGER" in
+    i3)
+        i3-scheme ;;
+    herbstluftwm)
+        herbstclient reload ;;
+esac

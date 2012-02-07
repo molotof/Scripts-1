@@ -1,8 +1,9 @@
 #!/bin/bash
-backup_host='root@tarot'
+backup_host='root@diadian'
 backup_root='/home/backup'
-exclude='/dev/shm/rsync-excludes.rc'
+exclude='/tmp/rsync-excludes.rc'
 excludes=(
+    'var/tmp/*'
     'tmp/*'                     # Temp files.
     'tmp/.*'                    # Hidden temp files.
     'home/tmp/*'
@@ -12,7 +13,7 @@ excludes=(
     'home/wintervenom/.*'
 )
 
-echo > /tmp/rsync-excludes.rc
+echo > "$exclude"
 for file in ${excludes[@]}; do
     echo "$file" >> "$exclude"
 done
@@ -23,5 +24,5 @@ ssh $backup_host chmod 1777 "$backup_root/$HOSTNAME/"{tmp,var/{tmp,lock}}
 
 pacman -Qqe | grep -v "$(pacman -Qmq)" > /tmp/pacman.list
 scp /tmp/pacman.list "$backup_host:$backup_root/$HOSTNAME/pacman.list"
-rm /tmp/pacman.list
+rm -f /tmp/pacman.list "$exclude"
 

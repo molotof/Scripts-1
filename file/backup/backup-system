@@ -5,7 +5,7 @@
 ################################
 backup_label="demonpit"
 
-exclude="/dev/shm/rsync-excludes.rc"
+exclude="/tmp/rsync-excludes.rc"
 
 excludes=(
     'tmp/*'                     # Temp files.

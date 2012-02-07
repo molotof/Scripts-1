@@ -30,7 +30,10 @@ while [[ $1 ]]; do
             ;;
         init)
             for s in {rc,init}{.d,}; do
-                [[ -f /etc/$s/$d ]] && /etc/$s/$d $a
+                if [[ -f /etc/$s/$d ]]; then
+                    /etc/$s/$d $a
+                    break
+                fi
             done
             ;;
         *)

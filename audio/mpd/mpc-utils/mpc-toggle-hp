@@ -1,0 +1,29 @@
+#!/bin/bash
+### MPC Toggle Headphones ######
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Dependencies
+# - mpc
+#
+if ! which mpc &> /dev/null; then
+    echo "MPC not installed."
+    exit 1
+fi
+
+c='Headphones'
+[[ $1 ]] && c=$1
+eq=($(mpc outputs | grep "$c"))
+noeq=($(mpc outputs | grep Normal))
+
+toggle () {
+    mpc disable $1 &> /dev/null
+    mpc enable $2 &> /dev/null
+}
+
+if [[ ${eq[4]} == 'enabled' ]]; then
+    toggle ${eq[1]} ${noeq[1]}
+else
+    toggle ${noeq[1]} ${eq[1]}
+fi
+echo "$c mode ${noeq[4]}."

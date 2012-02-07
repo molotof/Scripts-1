@@ -179,16 +179,17 @@ while :; do
             continue
         fi
 
-        [[ $((RANDOM % 5)) -eq 0 ]] && s='-s'
-        [[ $((RANDOM % 3)) -ne 0 ]] && p='-p'
-        [[ $((RANDOM % 5)) -ne 0 ]] && r='-r'
+        [[ $((RANDOM % 5)) -eq 0 ]] && s='-s '
+        [[ $((RANDOM % 3)) -ne 0 ]] && p='-p '
+        [[ $((RANDOM % 5)) -ne 0 ]] && r='-r '
+        flags=$(echo -n "$s$p$r-n $possibilities")
         track=$(relevant-track ${s} ${p} ${r} -n ${possibilities} "${query}" 2> /dev/null | shuf | head -1)
         if ! grep -qF "${track}" "${cache}"; then
             echo "        ${track}"
            title "relevant-track-irc: ${line[0]} added ${track}"
             mpc -q add "${track}"
             mpc -q play
-            echo -e "${track}\t${line[0]}\t${line[1]}" >> "${cache}"
+            echo -e "${track}\t${line[0]}\t${line[1]}\t$flags" >> "${cache}"
             if [[ $(wc -l < "${cache}") -gt ${max_cache_size} ]]; then
                 tail -n $((max_cache_size - (max_cache_size / 10))) "${cache}" > "${cache}.new"
                 mv "${cache}.new" "${cache}"

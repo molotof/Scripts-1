@@ -13,11 +13,11 @@ status="$USER"
 if [[ "$cache" ]]; then
     IFS=$'\t'
     trigger=($(tail -10 "$cache" | grep -F "$(mpc current -f '%file%')" | cut -f2-))
-    [[ "$trigger" ]] && status="${trigger[0]}: ‹${trigger[1]}›"
+    [[ "$trigger" ]] && status="${trigger[0]} said ‹${trigger[1]}› (flags: ${trigger[2]})"
 fi
 file=$(mpc current -f '%file%')
 if [[ "$file" ]]; then
-    echo "Playing $(mpc current -f '"%title%"|%file%[ by %artist%]'), in response to $status"
+    echo "Playing $(mpc current -f '"%title%"[ by %artist%]|%file%') because $status"
 else
     echo "Not playing anything."
 fi
