@@ -51,6 +51,12 @@ tree = {
                 '.config/xmobar/*',
             ),
         },
+        'system': {
+            'pacman': (
+                '/etc/pacman/pacman.conf',
+                '/etc/pacman/pacman.d/mirrorlist',
+            )
+        },
         'text': {
             'vim': (
                 '.config/.vimrc',
