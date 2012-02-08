@@ -1,0 +1,17 @@
+#!/bin/bash
+. mpc-common
+if [[ "${1}" != '--scrobble' ]]; then
+    killall mpdscribble &> /dev/null
+else
+    shift
+    pidof mpdscribble || mpdscribble &> /dev/null
+fi
+mpc -q stop
+mpc -q clear
+if [[ $1 == '--nomods' ]]; then
+    mpc ls | grep -v '^Modules$' | mpc add
+else
+    mpc ls | mpc add
+fi
+mpc play
+notice 'Loaded entire library.'

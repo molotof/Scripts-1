@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+### Random Word Generator ######
+# Version 0.1 by Scott Garrett #
+################################
+
+import random
+
+
+def main():
+    rng = random.SystemRandom()
+    #letters = [chr(char) for char in range(97, 123)]
+    letters = [char for char in 'arstdhneioaoeuidhtns']
+    history = []
+    for x in range(0, 100):
+        rng.shuffle(letters)
+        word = ''.join(letters)[:rng.randint(3, min(12, len(letters)))]
+        if word not in history:
+            print(word)
+            history.append(word)
+
+if __name__ == '__main__':
+    main()

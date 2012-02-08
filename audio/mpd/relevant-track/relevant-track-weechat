@@ -1,0 +1,215 @@
+#!/bin/bash
+### MPD Relevant Track for WC ##
+# Version 0.2 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Dependencies:
+#
+# mpc, weechat
+
+###############
+### Globals ###
+###############
+max_queue_size=3
+max_cache_size=2000
+min_line_length=5
+possibilities=5
+query_words=1
+skips=0
+cache="${HOME}/.cache/relevant-track.cache"
+log_path="/mnt/ssh/diadian/.logs/irc/$(date +'%Y/%m/%d')/%s.%s.weechatlog"
+#log_path="/mnt/ssh/demonpit/.logs/irc/$(date +'%Y/%m/%d')/%s.%s.log"
+#log_path="${HOME}/Documents/Logs/IRC/$(date +'%Y/%m/%d')/%s.%s.log"
+backup="backup.relevant-track"
+channels=(
+    'freenode ##<3 #archlinux-offtopic'
+    'dreamviews #dv'
+)
+swap_words=(
+    'this that that this'
+    'my your your my'
+    "i'll you'll you'll i'll"
+    "i'm you're"
+    "im you're you're i'm"
+    'i you'
+    'me you you me'
+    "fuck you"
+    'he she you i we he'
+    'she he you i we she'
+    'we they they we'
+)
+
+#################
+### Functions ###
+#################
+title () {
+    [[ "${TERM}" != 'linux' ]] && echo -e "\033]0;$*\007"
+}
+
+pick_log_file () {
+    network="$1"
+    shift
+    channel=($@)
+    printf "${log_path}" "${network}" "${channel[((RANDOM % ${#channel[@]}))]}"
+}
+
+filter_line () {
+    tail -20 "${1}" | cut -f2- | awk -F'\t' '{
+        gsub(/[^[:alnum:]_-]/, "", $1);
+        if (!match(tolower($1), /network|channel|phrik|.*bot|blot|efneti|.*serv|.?--.?/)) {
+            gsub(/\w(https?|ftp|telnet|mailto)/, "", $2);
+            gsub(/(haha(ha)*| lol|rofl)/, "laugh", $2);
+            gsub(/\w?(:-?[[:punct:]DP\|Oo3Ss\{\}]|[\\\/].[\\\/]|[Xx]D|l[oa]+w?l)\w?/, "", $2);
+            gsub(/[<>]/, "", $2);
+            gsub(/^Title: .*/, "", $2);
+            gsub(/_/, " ", $2);
+            gsub(/^ +/, "", $2);
+            gsub(/ +$/, "", $2);
+            gsub(/^[[:punct:]].*/, "", $2);
+            #gsub(/[[:punct:]]+$/, "", $2);
+            print $1"\t"$2
+        }
+    }' |
+    awk -F'\t' 'length($2) >= '${min_line_length} | shuf | tail -1
+}
+
+get_line () {
+    while [[ -z "${line}" ]]; do
+        log_file=$(pick_log_file ${channels[((RANDOM % ${#channels[@]}))]})
+        line=$(filter_line "${log_file}")
+    done
+    echo "${line}"
+}
+
+word_swap () {
+    line="$*"
+    for pair in "${swap_words[@]}"; do
+        if [[ "${pair:0:1}" == '!' ]]; then
+            noswap=1
+            pair="${pair:1}"
+        fi
+        pair=($pair)
+        pair[1]=${pair[((1 + (RANDOM % ${#pair[@]} - 1)))]}
+        if [[ -z $noswap ]]; then
+            line=$(echo "$line" | sed "s/\b${pair[0]}\b/__^__${pair[0]}__^__/gi")
+            line=$(echo "$line" | sed "s/\b${pair[1]}\b/${pair[0]}/gi")
+            line=$(echo "$line" | sed "s/__^__${pair[0]}__^__/${pair[1]}/gi")
+        else
+            line=$(echo "$line" | sed "s/\b${pair[1]}\b/${pair[0]}/gi")
+        fi
+        unset noswap
+    done
+    echo "$line"
+}
+
+get_excerpt () {
+    echo "$*" | awk '{
+        gsub(/(artist|title|album)./,"");
+        gsub(/[^[:alnum:][:space:]'\'']/," ");
+        srand(); word=int(1 + rand() * NF);
+        for (x=0; x<=int('"${query_words}"' + rand() * (1 + NF - word)); x++)
+            printf("%s ",$(word + x)); printf("\n")
+    }' | sed 's/[ \t]*$//'
+}
+
+shuffle () {
+    echo "$*" | tr ' ' '\n' | shuf | tr '\n' ' '
+    echo
+}
+
+cleanup () {
+    echo 'Restoring MPD settings...'
+    mpc -q pause
+    mpc -q clear
+    mpc -q load "${backup}"
+    mpc -q rm "${backup}"
+    while [[ "$2" ]]; do
+        mpc -q $1 $2
+        shift 2
+    done
+    echo 'Exiting.'
+}
+
+############
+### Main ###
+############
+while getopts kh opts; do
+    case "${opts}" in
+        'k')
+            echo '-k set, deleting cache.'
+            [[ -f "${cache}" ]] && rm "${cache}"
+            ;;
+        'h')
+            echo 'MPD Relevant Track - Weechat Log Example'
+            echo
+            echo "Usage:  ${0##*/} [-k]"
+            echo "    -k    Delete cache file."
+            exit
+    esac
+done
+echo 'Setting up MPD...'
+set -f
+mkdir -p "$(dirname "${cache}")"
+touch "${cache}"
+old_mpd_settings=$(mpc | tail -1 | grep -o 'repeat.*' | sed -s 's/://g')
+trap "cleanup ${old_mpd_settings}; exit" 2
+mpc -q rm "${backup}" &> /dev/null
+mpc -q save "${backup}" &> /dev/null
+mpc -q clear
+mpc -q consume on
+mpc -q single off
+mpc -q repeat off
+mpc -q random off
+echo 'Ready.'
+while :; do
+    while [[ $(mpc playlist | wc -l) -lt ${max_queue_size} ]]; do
+        unset line p s r d
+        line=$(get_line)
+        oifs="$IFS"; IFS=$'\t'
+        line=($line); IFS="$oifs"
+        query=${line[1]}
+        #query=$(get_excerpt "${line[1]}")
+        query=$(word_swap "${query}")
+        #query=$(shuffle "${query}")
+        echo "<${line[0]}> ${line[1]}"
+        echo "    Query: ${query}"
+        title "relevant-track-irc: Listening for relevant songs..."
+        if [[ "${#query}" -lt ${min_line_length} ]]; then
+            echo '    Too short'
+            continue
+        fi
+
+        [[ $((RANDOM % 5)) -eq 0 ]] && s='-s '
+        [[ $((RANDOM % 3)) -ne 0 ]] && p='-p '
+        [[ $((RANDOM % 5)) -ne 0 ]] && r='-r '
+        flags=$(echo -n "$s$p$r-n $possibilities")
+        track=$(relevant-track ${s} ${p} ${r} -n ${possibilities} "${query}" 2> /dev/null | shuf | head -1)
+        if ! grep -qF "${track}" "${cache}"; then
+            echo "        ${track}"
+           title "relevant-track-irc: ${line[0]} added ${track}"
+            mpc -q add "${track}"
+            mpc -q play
+            echo -e "${track}\t${line[0]}\t${line[1]}\t$flags" >> "${cache}"
+            if [[ $(wc -l < "${cache}") -gt ${max_cache_size} ]]; then
+                tail -n $((max_cache_size - (max_cache_size / 10))) "${cache}" > "${cache}.new"
+                mv "${cache}.new" "${cache}"
+            fi
+            if ((skips > -5)); then
+                if ((skips-- == -4)); then
+                    ((possibilities > 1)) && ((possibilities--))
+                    skips=0
+                fi
+            fi
+        else
+            echo '    Skipped'
+            if ((skips < 5)); then
+                if ((skips++ == 4)); then
+                    ((possibilities++))
+                    skips=0
+                fi
+            fi
+        fi
+        sleep 5
+    done
+    sleep 10
+done

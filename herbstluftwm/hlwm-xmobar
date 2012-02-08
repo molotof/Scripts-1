@@ -1,0 +1,6 @@
+#!/bin/bash
+colors=($(awk '/^\*color/{print $2}' .Xdefaults))
+
+killall barstatus xmobar trayer
+hlwm-xmobar-tags | xmobar -B "${colors[0]}" -F "${colors[11]}"  ~/.config/xmobar/bottom-hlwm &
+trayer --edge bottom --align left --tint "${colors[0]//#/0x}" --alpha 0 --transparent true --height 14 --width 5 --widthtype percent &

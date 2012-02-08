@@ -1,0 +1,52 @@
+#!/bin/bash
+DISPLAY=:0.0
+horiz='center'
+vert='middle'
+color='green'
+ocolor='black'
+size=36
+time=5
+
+while getopts h:v:c:o:s:t:l:bi opt; do
+    case "${opt}" in
+        h) horiz="${OPTARG}";;
+        v) vert="${OPTARG}";;
+        c) color="${OPTARG}";;
+        o) ocolor="${OPTARG}";;
+        s) size="${OPTARG}";;
+        t) time="${OPTARG}";;
+        b) blink=1;;
+        i) input=1;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [[ $time -eq 0 || $blink ]]; then
+    blink=$((1 + time)); time=1
+fi
+
+trap 'exit 0' PIPE
+
+f="-*-dejavu sans mono-bold-r-*-*-$size-*-*-*-*-*-iso10646-1"
+o="osd_cat -d${time} -A ${horiz} -p ${vert} -O3 -c ${color} -u ${ocolor}"
+
+if [[ -z ${input} ]]; then
+    if [[ -z ${blink} ]]; then
+        echo -e "$*" | $o -f "$f"
+    else
+        if [[ $blink -gt 1 ]]; then
+            for ((x=1; x<${blink}; x++)); do
+                echo -e "$*" | $o -f "$f"
+                sleep 1
+            done
+        else
+            while :; do
+                echo || exit
+                echo -e "$*" | $o -f "$f"
+                sleep 1
+            done
+        fi
+    fi
+else
+    $o -f "$f" $*
+fi

@@ -1,0 +1,4 @@
+#!/bin/bash
+cardname=`lspci | grep VGA | sed 's/VGA compatible controller //' | cut -f3 -d:`
+cardloc=`lspci | grep VGA | sed 's/VGA compatible controller: //' | awk '{print $1}'`
+echo "This machine has an$cardname located at PCI:$cardloc."

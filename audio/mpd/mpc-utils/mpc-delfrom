@@ -1,0 +1,18 @@
+#!/bin/bash
+. mpc-common
+[[ -z "${song}" ]] && exit 1
+[[ -z "${1}" ]] && syntax 'playlist'
+for playlist in "$@"; do
+    if [[ -f "${playlists}/${playlist}.m3u" ]]; then
+        grep -vF "/${song}" "${playlists}/${playlist}.m3u" > "/tmp/${playlist}.m3u"
+        sort -u "/tmp/${playlist}.m3u" -o "${playlists}/${playlist}.m3u"
+        #[[ $(wc -l < cat "/tmp/${playlist}.m3u") -eq 0 ]] && rm "${playlists}/${playlist}.m3u"
+        rm "/tmp/${playlist}.m3u"
+    fi
+done
+song=${song##*/}
+[[ ${#song} -gt 20 ]] && song="${song:0:20}..."
+notice "${song}\ndeleted from:\n$(for playlist in "$@"; do
+    [[ ${#playlist} -gt 20 ]] && playlist="${playlist:0:20}..."
+    echo "'${playlist}'"
+done)"

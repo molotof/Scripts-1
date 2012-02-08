@@ -1,0 +1,11 @@
+#!/bin/bash
+. mpc-common
+[[ -z "${1}" ]] && syntax "playlist [playlist ...]"
+for playlist in "$@"; do
+    mpc -q rm "${playlist}"
+    mpc -q save "${playlist}"
+done
+notice "Queue saved to:\n$(for playlist in "$@"; do
+    [[ ${#playlist} -gt 20 ]] && playlist="${playlist:0:20}..."
+    echo "${playlist}"
+done)"

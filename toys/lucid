@@ -1,0 +1,101 @@
+#!/bin/bash
+### Lucid Alarm Clock ##########
+# Version 0.1 by Scott Garrett #
+# Wintervenom [(at)] gmail.com #
+################################
+# Tries to wake a user up from #
+# slumber into awareness with- #
+# out fully awakening the user #
+# until a final iteration.     #
+################################
+
+###############
+### Globals ###
+###############
+# MPD playlist of sleep-time tracks.
+sleep_playlist='Calming'
+#sleep_playlist='Adventure-light'
+# MPD playlist of wake-time tracks.
+wake_playlist='Favorites'
+# Set system volume to this percent during sleep period.
+sleep_vol=30
+# Set system volume to this percent during wake period.
+wake_vol=35
+# Set system volume to this percent on final wake.
+final_wake_vol=40
+# Decrease volumes by this percent in headphone mode.
+headphone_diff=-10
+# Speed of system volume transition, in tenths of a second.
+volknob_speed=1
+# Initial sleep time.
+sleep_time="30m"
+# Seconds of wake time multiplied by iteration.
+wake_multiplier=10
+# Minutes of rest time multiplied by iteration.
+rest_multiplier=1
+# Number of iterations of wake and rest periods.
+wake_rest_iters=10
+# Seconds before increasing volume after loading playlist.
+playlist_vol_delay=5
+# Minutes before increasing the volume on final wake.
+final_wake_delay=10
+# Minutes before exiting after final wake.
+exit_delay=1
+
+
+#################
+### Functions ###
+#################
+volume () {
+    # Smoothly transition system volume.
+    command volume Master $1 $volknob_speed
+}
+
+play () {
+    # Gently change between playlists to avoid surprises.
+    volume 0
+    if [[ $1 == 'sleep' ]]; then
+        mpc-load $sleep_playlist
+        sleep $playlist_vol_delay
+        volume $sleep_vol
+    else
+        mpc-load $wake_playlist
+        sleep $playlist_vol_delay
+        volume $wake_vol
+    fi
+}
+
+
+############
+### Main ###
+############
+trap 'echo Exiting.; volume 0; mpc -q pause; exit' 2
+
+if [[ "$1" == '-h' || "$1" == '--headphones' ]]; then
+    ((sleep_vol += headphone_diff))
+    ((wake_vol += headphone_diff))
+    shift
+fi
+
+[[ "$*" ]] && sleep_time="$*"
+
+mpc -q repeat off
+mpc -q consume off
+mpc -q random on
+mpc -q crossfade 10
+
+play sleep
+sleep "${sleep_time}"
+for ((x=1; x<wake_rest_iters; x++)); do
+    play wake
+    sleep $((wake_multiplier * x))
+    play sleep
+    sleep $((rest_multiplier * x))m
+done
+play wake
+sleep ${final_wake_delay}m
+volume $final_wake_vol
+sleep ${exit_delay}m
+volume 0
+mpc -q pause
+
