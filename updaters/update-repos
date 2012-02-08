@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 ### Update Local trees #############
-# Ver. 20120207-1 by Scott Garrett #
+# Ver. 20120207-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us  #
 ####################################
 
@@ -235,8 +235,10 @@ def redact(path, regex):
     Call to `sed` to redact passwords and whatnot.  I'm too much of a lazy
     mo'fo at the moment to implement this in Python.
     """
-    return subprocess.call(['sed', '-ri', r's/{}/\1[redacted]/'.format(regex),
-                           path])
+    regex = r'-ri', r's/{}/\1[redacted]/'.format(regex)
+    retcode = subprocess.call(['sed', regex, path])
+    if retcode != 0:
+        raise Exception('sed failed wih error {}.'.format(retcode))
 
 
 def git(*args):
@@ -252,18 +254,14 @@ def copy(source, dest):
     """
     Copies <source> to <dest>, creating directories if need be.
     """
-    try:
-        if not os.path.exists(dest):
-            os.makedirs(dest)
-        dest = os.path.join(dest, os.path.basename(source))
-        if os.path.isdir(source):
-            shutil.copytree(source, dest)
-        else:
-            shutil.copy2(source, dest)
-        return dest
-    except (IOError, OSError, os.error) as err:
-        print('{} -> {}'.format(source, dest))
-        print("\tERROR: {}".format(str(err)))
+    if not os.path.exists(dest):
+        os.makedirs(dest)
+    dest = os.path.join(dest, os.path.basename(source))
+    if os.path.isdir(source):
+        shutil.copytree(source, dest)
+    else:
+        shutil.copy2(source, dest)
+    return dest
 
 
 def list_tree(tree, root):
@@ -300,15 +298,18 @@ def main():
 
     print("Copying files to repo trees...")
     for path, root, redact_re in list_tree(tree, root_dir):
-        new_path = copy(path, root)
-        if redact_re:
-            redact(new_path, redact_re)
+        try:
+            new_path = copy(path, root)
+            if redact_re:
+                redact(new_path, redact_re)
+        except (IOError, OSError, os.error, Exception) as err:
+            print('Error: {} ({} -> {})'.format(str(err), path, root))
 
     print("Pushing changes...")
     msg = '[Update %Y%m%d-%H%M%S]'
     if sys.argv[1:]:
         msg = ' '.join((msg, ' '.join(sys.argv[1:])))
-    msg = datetime.date.today().strftime(msg)
+    msg = datetime.datetime.today().strftime(msg)
     for directory in tree.keys():
         try:
             os.chdir(os.path.join(root_dir, directory))
