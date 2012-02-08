@@ -235,8 +235,8 @@ def redact(path, regex):
     Call to `sed` to redact passwords and whatnot.  I'm too much of a lazy
     mo'fo at the moment to implement this in Python.
     """
-    regex = r'-ri', r's/{}/\1[redacted]/'.format(regex)
-    retcode = subprocess.call(['sed', regex, path])
+    regex = r's/{}/\1[redacted]/'.format(regex)
+    retcode = subprocess.call(['sed', '-ri', regex, path])
     if retcode != 0:
         raise Exception('sed failed wih error {}.'.format(retcode))
 
@@ -302,7 +302,7 @@ def main():
             new_path = copy(path, root)
             if redact_re:
                 redact(new_path, redact_re)
-        except (IOError, OSError, os.error, Exception) as err:
+        except (IOError, OSError, os.error) as err:
             print('Error: {} ({} -> {})'.format(str(err), path, root))
 
     print("Pushing changes...")
