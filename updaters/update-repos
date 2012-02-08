@@ -53,8 +53,8 @@ tree = {
         },
         'system': {
             'pacman': (
-                '/etc/pacman/pacman.conf',
-                '/etc/pacman/pacman.d/mirrorlist',
+                '/etc/pacman.conf',
+                '/etc/pacman.d/mirrorlist',
             )
         },
         'text': {
