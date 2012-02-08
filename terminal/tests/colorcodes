@@ -1,4 +1,0 @@
-#!/bin/bash
-for x in {0..255}; do
-    printf "\x1b[0m%3d \x1b[48;5;${x}m        \x1b[0m\n" $x
-done | less -R

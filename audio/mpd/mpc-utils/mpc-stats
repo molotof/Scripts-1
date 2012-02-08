@@ -1,3 +1,0 @@
-#!/bin/bash
-stats=($(mpc stats | head -3 | awk '{print $2}'))
-echo "MPD is currently keeping track of ${stats[2]} songs in this music library."

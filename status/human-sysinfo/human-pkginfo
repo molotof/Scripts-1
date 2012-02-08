@@ -1,2 +1,0 @@
-#!/bin/bash
-echo "There are $(pacman -Q | wc -l) packages installed on this system."

@@ -1,9 +1,0 @@
-#!/bin/bash
-largest=($(du -sh ~/* | sort -h | tail -1))
-echo -n "On this machine, " &&
-    df -h |
-    tail -n+2 |
-    awk '{printf "\"" $6 "\" is using " $3 " of " $2 ", "} END {print ""}' |
-    head -c-3 &&
-        echo ", and the largest directory being \"${largest[1]},\" clocking in at ${largest[0]}."
-

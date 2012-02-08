@@ -1,3 +1,0 @@
-#!/bin/bash
-killall xmobar
-barstatus | xmobar $XDG_CONFIG_HOME/xmobar/barstatus-$WINDOW_MANAGER &

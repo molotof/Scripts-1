@@ -1,4 +1,0 @@
-#!/bin/bash
-killall i3bar
-killall barstatus
-barstatus | i3bar -s ~/.config/i3/ipc.sock -f '-misc-fixed-medium-r-normal-*-10-*-*-*-*-*-iso10646-1' &
