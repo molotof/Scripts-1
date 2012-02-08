@@ -9,6 +9,7 @@ import os
 import shutil
 import sys
 import subprocess
+import datetime
 
 
 root_dir = os.path.join(os.path.expanduser('~'), 'Projects')
@@ -238,6 +239,15 @@ def redact(path, regex):
                            path])
 
 
+def git(*args):
+    """
+    Lazy GIT call.
+    """
+    retcode = subprocess.call(('git',) + args)
+    if retcode != 0:
+        raise Exception('GIT failed with error {}.'.format(retcode))
+
+
 def copy(source, dest):
     """
     Copies <source> to <dest>, creating directories if need be.
@@ -293,6 +303,20 @@ def main():
         new_path = copy(path, root)
         if redact_re:
             redact(new_path, redact_re)
+
+    print("Pushing changes...")
+    msg = '[Update %Y%m%d-%H%M%S]'
+    if sys.argv[1:]:
+        msg = ' '.join((msg, ' '.join(sys.argv[1:])))
+    msg = datetime.date.today().strftime(msg)
+    for directory in tree.keys():
+        try:
+            os.chdir(os.path.join(root_dir, directory))
+            git('add', '.')
+            git('commit', '-a', '-m', msg)
+            git('push', 'origin', 'master')
+        except (OSError, Exception) as err:
+            print('Error: {}'.format(str(err)))
 
 
 if __name__ == '__main__':
