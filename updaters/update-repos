@@ -91,7 +91,7 @@ tree = {
             ),
         },
         'x11': (
-            '.xbindkeys',
+            '.xbindkeysrc',
             '/etc/X11/xorg.conf',
             '.Xdefaults',
             '.fonts.conf',

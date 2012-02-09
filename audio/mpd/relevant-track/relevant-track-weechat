@@ -19,10 +19,9 @@ skips=0
 cache="${HOME}/.cache/relevant-track.cache"
 log_path="/mnt/ssh/diadian/.logs/irc/$(date +'%Y/%m/%d')/%s.%s.weechatlog"
 #log_path="/mnt/ssh/demonpit/.logs/irc/$(date +'%Y/%m/%d')/%s.%s.log"
-#log_path="${HOME}/Documents/Logs/IRC/$(date +'%Y/%m/%d')/%s.%s.log"
 backup="backup.relevant-track"
 channels=(
-    'freenode ##<3 #archlinux-offtopic'
+    'freenode ##<3 #archlinux #archlinux-offtopic'
     'dreamviews #dv'
 )
 swap_words=(
