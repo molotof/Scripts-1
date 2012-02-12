@@ -22,7 +22,7 @@ tree = {
         },
         'client': {
             'newsbeuter': (
-                ('.config/newsbeuter/config', '(.*(login|password) +).*')
+                ('.config/newsbeuter/config', '((login|password) *).*')
             ),
             'mutt': (
                 ('.muttrc', '((_pass|_url|_user|realname) *= *).*'),
