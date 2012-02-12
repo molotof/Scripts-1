@@ -268,7 +268,7 @@ def copy_tree(tree, root):
                     else:
                         shutil.copy2(src, dest)
                     if redact:
-                        redact = r's/{}/\1[redacted]/'.format(redact)
+                        redact = r's/{}/\1[redacted]/g'.format(redact)
                         ret = subprocess.call(['sed', '-ri', redact, dest])
                         if ret != 0:
                             err = 'sed failed wih error {}.'.format(ret)
