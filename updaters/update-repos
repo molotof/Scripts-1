@@ -22,10 +22,10 @@ tree = {
         },
         'client': {
             'newsbeuter': (
-                ('.config/newsbeuter/config', '((?:login|password) +).*')
+                ('.config/newsbeuter/config', '((login|password) +).*')
             ),
             'mutt': (
-                ('.muttrc', '((?:_pass|_url|_user|realname) *= *).*'),
+                ('.muttrc', '((_pass|_url|_user|realname) *= *).*'),
             ),
             'rtorrent': (
                 '.rtorrent.rc',
@@ -92,6 +92,7 @@ tree = {
         },
         'x11': (
             '.xbindkeysrc',
+            '.xinitrc',
             '/etc/X11/xorg.conf',
             '.Xdefaults',
             '.fonts.conf',
