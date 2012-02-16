@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+### Simple File Sanitizer ##############
+# Version 20120216-1 by Scott Garrett  #
+# Wintervenom [(at)] archlinux.us      #
+########################################
+
+import os
+import re
+import sys
+
+
+BASENAME = os.path.basename(sys.argv[0])
+VALID_CHARS = re.compile(r'[^\w\-\. ]')
+
+
+def usage():
+    """
+    Boring usage text.
+    """
+    m = 'Syntax: {} PATH [PATH ...]'
+    print(m.format(BASENAME))
+    exit(2)
+
+
+def sanitize(path, replacement='_'):
+    """
+    Replace non-word characters in filename of <path>.
+    """
+    # Split path into base path and file name.
+    path_parts = os.path.split(path)
+    # Get rid of leading and trailing spaces.
+    new_filename = path_parts[1].strip()
+    # Replace invalid characters with <replacement> character.
+    new_filename = VALID_CHARS.sub(replacement, new_filename)
+    # Build the new full path string.
+    new_path = os.path.join(path_parts[0], new_filename)
+    # Try to rename it, and, if something bad happens, complain.
+    try:
+        os.rename(path, new_path)
+    except (IOError, OSError) as err:
+        m = 'ERROR: "{}" -> "{}": {}'
+        print(m.format(path, new_path, str(err)))
+        return
+    # Everything went smashingly fine!
+    m = '"{}" -> "{}": OK'
+    print(m.format(path, new_path))
+    return new_path
+
+
+def main():
+    """
+    Main screen turn on.
+    """
+    if len(sys.argv[1:]) < 1:
+        usage()
+    print('Sanitizing file names...')
+    # Iterate through paths given by user as arguments.
+    for path in sys.argv[1:]:
+        # Recurse through and fix files' names if the user gave a
+        # directory as a path.
+        if os.path.isdir(path):
+            for root, dirs, files in os.walk(path):
+                for path in files:
+                    path = os.path.join(root, f)
+                    sanitize(path)
+        else:
+            sanitize(path)
+
+
+if __name__ == '__main__':
+    # Handle user abortion.  You monster.
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nAborted.")

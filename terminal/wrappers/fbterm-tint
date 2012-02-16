@@ -9,14 +9,18 @@
 # - ImageMagick (tinting)
 #
 img="$HOME/.background"
-for f in defaults resources; do
-    [[ -f ~/.X$f ]] && tint=$(awk '/shading/{print $2}' ~/.X$f)
-    [[ "$tint" ]] && break || tint=100
-done
-clear
-if which convert &> /dev/null && [[ -f "$img" ]]; then
-    convert "$img" -fill black -colorize $((100 - tint)) "$img.fbterm"
-    img+=".fbterm"
+if [[ -f "$img.fbterm" ]]; then
+        img+=".fbterm"
+else
+    for f in defaults resources; do
+        [[ -f ~/.X$f ]] && tint=$(awk '/shading/{print $2}' ~/.X$f)
+        [[ "$tint" ]] && break || tint=100
+    done
+    clear
+    if which convert &> /dev/null && [[ -f "$img" ]]; then
+        convert "$img" -fill black -colorize $((100 - tint)) "$img.fbterm"
+        img+=".fbterm"
+    fi
 fi
 fbv -ciuker "$img" << EOF
 q

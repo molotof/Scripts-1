@@ -133,6 +133,7 @@ tree = {
             'cleanup': (
                 'bin/sample-dups',
                 'bin/superclean',
+                'bin/sanitize',
             ),
             'helpers': (
                 'bin/archive',
