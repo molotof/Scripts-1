@@ -1,6 +1,6 @@
 #!/bin/bash
 ### wvm-open:  File/URL Handler ####
-# Version 20120217-3 by Scott Garrett #
+# Version 20120217-4 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Dependencies:
@@ -15,6 +15,8 @@
 # + 20120217-3
 #   - Fixed the built-in zip handler to deal with local files.
 #   - Minor corrections.
+# + 20120217-4
+#   - Handle user options *after* loading configuration/overrides.
 
 # Curl connection timeout.
 timeout=10
@@ -313,22 +315,22 @@ show_handlers () {
     echo
     echo '### Match Handlers ###'
     for strings in "${!match_handlers[@]}"; do
-        echo "Matches: $strings"
-        echo "Handler: ${match_handlers["$strings"]}"
+        echo "  Matches: $strings"
+        echo "  Handler: ${match_handlers["$strings"]}"
         echo
     done
     echo
     echo '### Class Handlers ###'
     for classes in "${!class_handlers[@]}"; do
-        echo "Classes: $classes"
-        echo "Handler: ${class_handlers["$classes"]}"
+        echo "  Classes: $classes"
+        echo "  Handler: ${class_handlers["$classes"]}"
         echo
     done
     echo
     echo '### Extension Classes ###'
     for exts in "${!ext_classes[@]}"; do
-        echo "   Exts: $exts"
-        echo "  Class: ${ext_classes["$exts"]}"
+        echo "    Extns: $exts"
+        echo "    Class: ${ext_classes["$exts"]}"
         echo
     done
     exit 2
@@ -428,10 +430,18 @@ unset class protocol
 declare -A match_handlers class_handlers ext_classes
 
 # Internal variables.
-version=20120217-2
+version=20120217-4
 self=$0
 curl="curl -s --netrc-optional --connect-timeout $timeout"
 notify=$(type -p notify-send)
+
+# Create a default configuration file if it is missing or empty.
+if [[ ! -f "$config" ]] || [[ "$(stat -tc '%s' "$config")" -lt 5 ]]; then
+    default_config
+fi
+
+# Load the configuration.
+. "$config"
 
 # Handle command-line options.
 while getopts hvqkct:p: opt; do
@@ -463,14 +473,6 @@ done
 # Display usage text if there aren't any arguments at all.
 [[ -z $1 ]] &&
     usage
-
-# Create a default configuration file if it is missing or empty.
-if [[ ! -f "$config" ]] || [[ "$(stat -tc '%s' "$config")" -lt 5 ]]; then
-    default_config
-fi
-
-# Load the configuration.
-. "$config"
 
 # If we're running in a non-interactive SSH session, set a DISPLAY so notices
 # will still be displayed on the correct machine.
