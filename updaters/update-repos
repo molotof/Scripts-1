@@ -143,6 +143,7 @@ tree = {
                 'bin/organize-by-*',
             ),
             'launchers': (
+                'bin/open',
                 'bin/dmenu-launch',
                 'bin/firefox-launch',
                 'bin/launch',

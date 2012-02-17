@@ -1,0 +1,466 @@
+#!/bin/bash
+### wvm-handler:  File/URL Handler ####
+# Version 20120217-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+# Dependencies:
+# - Bash >= 4.1.9
+# Todo:
+# - Finish commenting
+
+shopt -s nocasematch
+shopt -s extglob
+
+version=20120217-1
+timeout=10
+config="$HOME/.config/wvm-handler/config"
+tmp='/tmp'
+
+DISPLAY=':0.0'
+PATH+=":$HOME/bin"
+# Let's not recurse our way to hell if the BROWSER env is set to this binary.
+# (Which it is, on my machine.  :P)
+[[ $BROWSER == @(*/|'')"${0##*/}" ]] &&
+    unset BROWSER
+if pidof X > /dev/null; then
+    BROWSER=${BROWSER:-firefox}
+else
+    BROWSER=${BROWSER:-elinks}
+fi
+# Open with <binary> if a string in [<matches>] fits the URL or path.
+declare -A match_handlers=(
+    ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
+)
+
+# Open [<class>] with <binary>.
+declare -A class_handlers=(
+    ['image/*']='mirage'
+    ['*/ogg */octet-stream audio/* video/*']='urxvt -e mplayer'
+    ['*/vnd.oasis.* */vnd.ms-* */vnd.openxml* */msword']='libreoffice'
+    ['*/pdf */postscript']='zathura'
+    ['*/text */css */plain']='gvim'
+    ['application/zip']='handle_zip'
+    ['magnet']='qbittorrent'
+    ['dir']=$BROWSER
+    ['default']=$BROWSER
+)
+
+# Map [<extensions>] to <class>.
+declare -A ext_classes=(
+    ['ahx mod s3m xm 669 med mtm it stm']='audio/x-mod'
+    ['asc c cfg conf cpp log spec txt text']='text/plain'
+    ['asf']='video/x-ms-asf'
+    ['asx']='video/x-ms-asf'
+    ['avi']='video/x-msvideo'
+    ['bz2 tbz']='application/x-bzip'
+    ['class']='application/octet-stream'
+    ['css']='text/css'
+    ['doc']='application/msword'
+    ['dtd']='text/xml'
+    ['dvi']='application/x-dvi'
+    ['flac']='audio/flac'
+    ['flv']='video/x-flv'
+    ['gif']='image/gif'
+    ['gz tgz']='application/x-gzip'
+    ['htm html']='text/html'
+    ['jpg jpeg']='image/jpeg'
+    ['js']='text/javascript'
+    ['m3u']='audio/x-mpegurl'
+    ['mov qt']='video/quicktime'
+    ['mp3']='audio/mpeg'
+    ['mp4']='video/mp4'
+    ['mpg mpeg']='video/mpeg'
+    ['odc']='application/vnd.oasis.opendocument.chart'
+    ['odf']='application/vnd.oasis.opendocument.formula'
+    ['odg']='application/vnd.oasis.opendocument.graphics'
+    ['odi']='application/vnd.oasis.opendocument.image'
+    ['odm']='application/vnd.oasis.opendocument.text-master'
+    ['odp']='application/vnd.oasis.opendocument.presentation'
+    ['ods']='application/vnd.oasis.opendocument.spreadsheet'
+    ['odt']='application/vnd.oasis.opendocument.text'
+    ['oga ogg ogv']='audio/ogg'
+    ['otc']='application/vnd.oasis.opendocument.chart-template'
+    ['otf']='application/vnd.oasis.opendocument.formula-template'
+    ['otg']='application/vnd.oasis.opendocument.graphics-template'
+    ['oth']='application/vnd.oasis.opendocument.text-web'
+    ['oti']='application/vnd.oasis.opendocument.image-template'
+    ['otp']='application/vnd.oasis.opendocument.presentation-template'
+    ['ots']='application/vnd.oasis.opendocument.spreadsheet-template'
+    ['ott']='application/vnd.oasis.opendocument.text-template'
+    ['pac']='application/x-ns-proxy-autoconfig'
+    ['pdf']='application/pdf'
+    ['png']='image/png'
+    ['ppt']='application/vnd.ms-powerpoint'
+    ['ps']='application/postscript'
+    ['sig']='application/pgp-signature'
+    ['spl']='application/futuresplash'
+    ['swf']='application/x-shockwave-flash'
+    ['tar z']='application/x-tar'
+    ['torrent']='application/x-bittorrent'
+    ['wav']='audio/x-wav'
+    ['wax']='audio/x-ms-wax'
+    ['wma']='audio/x-ms-wma'
+    ['wmv']='video/x-ms-wmv'
+    ['xbm']='image/x-xbitmap'
+    ['xls']='application/vnd.ms-excel'
+    ['xml']='text/xml'
+    ['xpm']='image/x-xpixmap'
+    ['xwd']='image/x-xwindowdump'
+    ['zip mdz xmz s3z']='application/zip'
+    ['default']='application/octet-stream'
+)
+
+
+
+#########################
+### Handler Functions ###
+#########################
+handle_zip () {
+    if ! type -p bsdtar > /dev/null; then
+        error 'bsdtar not installed.'
+        return 1
+    fi
+    ext_class "$1" || base=$(remote_name "$1")
+    base=${base:-"${1##*/}"}
+    path="$tmp/url-handler_$USER"
+    contents="$base.contents"
+    mkdir -p "$path/$contents"
+    cd "$path"
+    info "Downloading '$base' to '$path'..."
+    if $curl -o "$base" "$1"; then
+        info "Extracting '$base'..."
+        if bsdtar -xf "$base" -C "$contents"; then
+            filecount=$(find "$contents" -name '*.*' -type f | wc -l)
+            if [[ $filecount -le 2 ]]; then
+                exec "$self" "$contents"/*.*
+            else
+                info 'Too many files; launching directory browser...'
+                launch $(handler_of 'dir') "$path/$contents"
+            fi
+        else
+            error "Failed to extract '$base'."
+        fi
+    else
+        error "Failed to download '$base'."
+    fi
+}
+
+
+
+######################
+### Core Functions ###
+######################
+
+# info [message]
+# error [message]
+# fatal [message]
+# Displays a message to both the console and with the binary in <notify>,
+# if it is set.  If <quiet> is set, will return without doing anything.
+info () {
+    [[ $quiet ]] &&
+        return 0
+    echo "$1" >&2
+    [[ $notify ]] &&
+        $notify -t 5000 "$1" &> /dev/null
+}
+
+error () {
+    info "Error: ${1:-'Unexpected error.'}"
+    return 1
+}
+
+fatal () {
+    info "FATAL: ${1:-'Unexpected failure.'}"
+    exit 1
+}
+
+# remote_type <url>
+# Fetch the media type of a file on an HTTP server.
+remote_type () {
+    $curl -I "$1" | awk -F'(:|;) ' '
+        /^Content-Type/ {
+            gsub(/\s/, "", $2)
+            print $2
+        }
+    '
+}
+
+# remote_name <url>
+# Fetch the suggested name of a file on an HTTP server.
+remote_name () {
+    $curl -I "$1" | awk -F '(:|=)' '
+        /^Content-Disposition/ {
+            gsub(/^["\s]+/, "", $3)
+            gsub(/["\s]+$/, "", $3)
+            print $3
+        }
+    '
+}
+
+# match <query> <string> [string ...]
+# Search for a query in one or more strings.
+# Returns success exit code if found; error otherwise.
+# The <string> variable is left alone for future convenience.
+match () {
+    for string in "${@:2}"; do
+        [[ $1 == $string ]] &&
+            return 0
+    done
+    return 1
+}
+
+# ext_class <path|file|extension>
+# Return the defined class type mapped to a file extension.
+# Also returns success exit code if a handler (that isn't 'default') was
+# found; error otherwise.  A handler in <match_handlers> gets dibs over
+# If the argument is a path or file, the extension of it will be used.
+ext_class () {
+    local ext=${1##*/} class
+    for exts in "${!ext_classes[@]}"; do
+        if match "${ext##*.}" $exts; then
+            echo "${ext_classes["$exts"]}"
+            return 0
+        fi
+    done
+    echo "${ext_classes['default']}"
+    return 1
+}
+
+# handler_of <match|class>
+# Returns the command defined to handle a match or class.
+# Also returns success exit code if a handler (that isn't 'default') was
+# found; error otherwise.  A handler in <match_handlers> gets dibs over
+# one in <class_handlers>.
+handler_of () {
+    local classes strings command
+    for strings in "${!match_handlers[@]}"; do
+        if match "$1" $strings; then
+            echo "${match_handlers["$strings"]}"
+            return 0
+        fi
+    done
+    if [[ -z $command ]]; then
+        for classes in "${!class_handlers[@]}"; do
+            if match "$1" $classes; then
+                echo "${class_handlers["$classes"]}"
+                return 0
+            fi
+        done
+    fi
+    echo "${class_handlers['default']}"
+    return 1
+}
+
+# launch <command>
+# Launches command.  If <no_detach> is set, will launch in the background,
+# detached from the shell and terminal.  Functions will be exempt from this.
+launch () {
+    ftype=$(type -t "$1")
+    [[ -z $ftype ]] &&
+        return 1
+    if [[ $ftype != 'function' ]]; then
+        [[ $no_detach ]] &&
+            exec "$@"
+        export TERM='dumb'
+        unset PS1
+        "$@" </dev/null &>/dev/null & disown
+    else
+        "$@"
+    fi
+}
+
+
+# Display usage text.
+usage () {
+    cat <<EOF
+wvm-handler: General-Purpose File and URL Handler
+Version $version by Scott Garrett
+Wintervenom [(at)] archlinux.us
+
+Syntax: ${self##*/} [options] <file|url> [file|url ...]
+    -h      You are here.  ;)
+    -k      Don't launch handler in the background
+            nor disown the handler from the shell.
+    -t      Force files/links to be handled as this
+            match, media type, or class.
+    -p      Force files/links to be handled as this
+            protocol.
+    -q      Be quiet.
+    -v      Print currently-defined handlers.
+
+Configuration:
+    Stored in ~/.config/wvm-handler/config and sourced at
+    run-time, can be used to override default handlers for
+    path/URL matches, class handlers, and file extension-
+    to-class map (extension classes).
+
+    Match handlers allow you to launch an executable or a
+    function if the path or URL matches a space-delimited
+    key of strings.
+
+    Class handlers launch an executable based on what class
+    a file or URL is assigned to.  Classes can be either media
+    types (e.g., 'text/plain' or 'image/jpeg'), protocol names
+    (e.g., 'magnet', 'mailto' - but 'http'/'https' and 'file'
+    are handled specially), or a custom name.  Custom classes
+    need to be assigned an extension class if it is not a
+    protocol.
+
+    Extension classes will be used if a media type is not
+    availble for a file (as in the case of custom classes).
+    File extensions will be assigned the given class.
+
+    As previously mentioned, match and class handlers can use
+    functions, and you can define these in the configuration.
+    A zip handler function is built-in (and can be overridden
+    with a different match_handler definition).
+
+    Match Handler Example
+        match_handlers=(
+            ['strings to match']='binary-or-function'
+            # Handle YouTube video URLs with ytdl-mplayer.
+            ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
+            # Handle files in 'special_files' or of the '.special'
+            # type with some-app.
+            ['/home/bluh/special_files/* *.special']='some-app'
+        )
+
+    Class Handler Example
+        class_handlers=(
+            ['classis and media/types']='binary-or-function'
+            # Match a edia type...
+            ['*/text */css */plain']='gvim'
+            # ...and/or a protocol...
+            ['magnet']='qbittorrent'
+            # ...or a custom class.
+            ['banana']='monkey'
+            # Map to a handler function.
+            ['application/zip']='handle_zip'
+        )
+
+    Extension Class Example
+        ext_classes=(
+            ['file_extension']='class-or-media-type'
+            # Assign 'avi' as 'video/x-msvideo' media type.
+            ['avi']='video/x-msvideo'
+            # Assign 'bz2' and 'tgz' to 'application/x-bzip'.
+            ['bz2 tbz']='application/x-bzip'
+            # Assign 'peel' extensions to a custom class.
+            ['peel']='banana'
+        )
+EOF
+    exit 2
+}
+
+# Display all defined handlers.
+show_handlers () {
+    echo
+    echo '### Match Handlers ###'
+    for strings in "${!match_handlers[@]}"; do
+        echo "Matches: $strings"
+        echo "Handler: ${match_handlers["$strings"]}"
+        echo
+    done
+    echo
+    echo '### Class Handlers ###'
+    for classes in "${!class_handlers[@]}"; do
+        echo "Classes: $classes"
+        echo "Handler: ${class_handlers["$classes"]}"
+        echo
+    done
+    echo
+    echo '### Extension Classes ###'
+    for exts in "${!ext_classes[@]}"; do
+        echo "   Exts: $exts"
+        echo "  Class: ${ext_classes["$exts"]}"
+        echo
+    done
+    exit 2
+}
+
+
+############
+### Main ###
+############
+unset class protocol
+self=$0
+curl="curl -s --netrc-optional --connect-timeout $timeout"
+notify=$(type -p notify-send)
+
+# Load configuration (create config file if needed).
+mkdir -p "${config%/*}"
+[[ ! -f "$config" ]] &&
+    touch "$config"
+. "$config"
+
+while getopts hvqkt:p: opt; do
+    case "$opt" in
+        t)
+            class=$OPTARG
+            ;;
+        p)
+            protocol=$OPTARG
+            ;;
+        k)
+            no_detach=1
+            ;;
+        q)
+            quiet=1
+            ;;
+        v)
+            show_handlers
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+[[ -z $1 ]] &&
+    usage
+for file in "$@"; do
+    base=${file##*/}
+    if [[ -z $class ]]; then
+        if [[ -z $protocol && $file =~ ':' ]]; then
+            protocol=${file%%:*}
+        else
+            protocol=${protocol:-file}
+        fi
+        info "Identifying '$base'..."
+        command=$(handler_of "$file")
+        if [[ $? == 0 ]]; then
+            class='match'
+        else
+            case "$protocol" in
+                file)
+                    file=${file##*:}
+                    if [[ -f $file ]]; then
+                        class=$(file -bN --mime-type "$file")
+                    elif [[ ! ${file%%/*} =~ ^[[:alnum:]_.-]+$ ]]; then
+                        fatal "'$file' isn't a file or valid URL.  Did you forget to prepend a protocol?'"
+                    fi
+                    ;&
+                @(http|https))
+                    if [[ -z $class ]]; then
+                        start_time=$SECONDS
+                        class=$(remote_type "$file")
+                        if [[ -z $class ]]; then
+                            filename=$(remote_name "$file")
+                            class=$(ext_class "${filename:-$file}")
+                        fi
+                        ((SECONDS - start_time > timeout)) &&
+                            fatal "'$file' seems to be down."
+                    fi
+                    ;;
+                ftp)
+                    class=$(ext_type "$file")
+                    ;;
+                *)
+                    class=$protocol
+                    ;;
+            esac
+        command=$(handler_of "$class")
+        fi
+    fi
+    info "Opening '$base' ($class) with '$command'"
+    launch $command "$file"
+done
