@@ -1,6 +1,6 @@
 #!/bin/bash
 ### wvm-open:  File/URL Handler ####
-# Version 20120217-2 by Scott Garrett #
+# Version 20120217-3 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Dependencies:
@@ -11,6 +11,10 @@
 # + 20120217-2
 #   - Handlers and classes now written to configuration file, instead.
 #   - Minor bug-fixes and corrections.
+#   - Added option to create configuration and exit.
+# + 20120217-3
+#   - Fixed the built-in zip handler to deal with local files.
+#   - Minor corrections.
 
 # Curl connection timeout.
 timeout=10
@@ -44,43 +48,44 @@ wvm-open_browser () {
 }
 
 wvm-open_zip () {
+    local file base contents filecount
     # Complain if bsdtar isn't installed.
     if ! type -p bsdtar > /dev/null; then
         error 'bsdtar not installed.'
         return 1
+    # Otherwise, make sure input file isn't local.  If it's not, try to
+    # download it.
+    elif [[ ! -f "$1" ]]; then
+        # If the input filename doesn't have a class for its file extension so
+        # that we can name it something sane, try to get a suggested file name
+        # from the server.
+        ext_class "$1" || base=$(remote_name "$1")
+        base=${base:-"${1##*/}"}
+        file="tmp/${base:-"${1##*/}"}"
+        # If the server doesn't give one, then just use the input filename.
+        # Download the archive.
+        info "Downloading '$base' to '$tmp'..."
+        $curl --create-dirs -o "$file" "$1"
     fi
-    # If the input filename doesn't have a class for its file extension so
-    # that we can name it something sane, try to get a suggested file name
-    # from the server.
-    ext_class "$1" || base=$(remote_name "$1")
-    # If the server doesn't give one, then just use the input filename as is.
-    base=${base:-"${1##*/}"}
-    # Name of the directory extracted archive contents will be put.
-    contents="$base.contents"
-    # Create the directories if they don't exist...
-    mkdir -p "$tmp/$contents"
-    # ...and dive into the temp directory.
-    cd "$tmp"
-    # Download the archive file and extract it.
-    info "Downloading '$base' to '$tmp'..."
-    if $curl -o "$base" "$1"; then
-        info "Extracting '$base'..."
-        if bsdtar -xf "$base" -C "$contents"; then
-            # If successful, count the files that have extensions.
-            filecount=$(find "$contents" -name '*.*' -type f | wc -l)
-            if [[ $filecount -le 2 ]]; then
-                # If there are two or less, try to open them with the handler.
-                exec "$self" "$contents"/*.*
-            else
-                # Otherwise, let the user browse the archive.
-                info 'Too many files; launching directory browser...'
-                launch $(handler_of 'dir') "$tmp/$contents"
-            fi
+    # Extract the archive.
+    file=${file:-"$1"}
+    base=${base:-"${file##*/}"}
+    contents="$tmp/$base.contents"
+    mkdir -p "$contents"
+    info "Extracting '$base'..."
+    if bsdtar -xf "$file" -C "$contents"; then
+        # If successful, count the files that have extensions.
+        filecount=$(find "$contents" -name '*.*' -type f | wc -l)
+        if [[ $filecount -le 2 ]]; then
+            # If there are two or less, try to open them with the handler.
+            exec "$self" "$contents"/*.*
         else
-            error "Failed to extract '$base'."
+            # Otherwise, let the user browse the archive.
+            info 'Too many files; launching directory browser...'
+            launch $(handler_of 'dir') "$contents"
         fi
     else
-        error "Failed to download '$base'."
+        error "Failed to extract '$base'."
     fi
 }
 
