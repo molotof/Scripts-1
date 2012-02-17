@@ -345,6 +345,7 @@ Syntax: ${self##*/} [options] <file|url> [file|url ...]
     -p      Force files/links to be handled as this
             protocol.
     -q      Be quiet.
+    -c      Create initial configuation and exit.
     -v      Print currently-defined handlers.
 
 Configuration:
@@ -428,7 +429,7 @@ curl="curl -s --netrc-optional --connect-timeout $timeout"
 notify=$(type -p notify-send)
 
 # Handle command-line options.
-while getopts hvqkt:p: opt; do
+while getopts hvqkct:p: opt; do
     case "$opt" in
         t)
             class=$OPTARG
@@ -444,6 +445,10 @@ while getopts hvqkt:p: opt; do
             ;;
         v)
             show_handlers
+            ;;
+        c)
+            default_config
+            exit
             ;;
         *)
             usage
