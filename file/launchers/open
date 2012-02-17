@@ -62,7 +62,7 @@ wvm-open_zip () {
     # ...and dive into the temp directory.
     cd "$tmp"
     # Download the archive file and extract it.
-    info "Downloading '$base' to '$path'..."
+    info "Downloading '$base' to '$tmp'..."
     if $curl -o "$base" "$1"; then
         info "Extracting '$base'..."
         if bsdtar -xf "$base" -C "$contents"; then
@@ -74,7 +74,7 @@ wvm-open_zip () {
             else
                 # Otherwise, let the user browse the archive.
                 info 'Too many files; launching directory browser...'
-                launch $(handler_of 'dir') "$path/$contents"
+                launch $(handler_of 'dir') "$tmp/$contents"
             fi
         else
             error "Failed to extract '$base'."
