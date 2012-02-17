@@ -17,6 +17,9 @@
 #   - Minor corrections.
 # + 20120217-4
 #   - Handle user options *after* loading configuration/overrides.
+# + 20120217-5
+#   - Change zip handler to deal with most archives by default.
+#   - Handle launching binary files and XDG shortcuts.
 
 # Curl connection timeout.
 timeout=10
@@ -49,7 +52,7 @@ wvm-open_browser () {
     launch "$BROWSER" "$1"
 }
 
-wvm-open_zip () {
+wvm-open_archive () {
     local file base contents filecount
     # Complain if bsdtar isn't installed.
     if ! type -p bsdtar > /dev/null; then
@@ -224,7 +227,6 @@ default_config () {
     mkdir -p "${config%/*}"
     cat <<'EOF' > "$config"
 # vim: set filetype=sh ts=4 expandtab
-
 # Open with <command|function> if a string in [<matches>] fits the URL or path.
 match_handlers=(
     ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
@@ -239,8 +241,8 @@ class_handlers=(
     ['*/text */css */plain']='gvim'
     ['application/zip']='wvm-open_zip'
     ['magnet']='qbittorrent'
-    ['dir']='wvm-open_browser'
-    ['default']='wvm-open_browser'
+    ['dir']='wvm-open_generic'
+    ['default']='wvm-open_generic'
 )
 
 # Map [<extensions>] to <class>.
@@ -307,6 +309,11 @@ ext_classes=(
     ['zip mdz xmz s3z']='application/zip'
     ['default']='application/octet-stream'
 )
+
+EOF
+    cat <<EOF >> "$config"
+# Don't change this unless you know what you're doing.
+config_version=$version
 EOF
 }
 
@@ -425,15 +432,11 @@ EOF
 ### Main ###
 ############
 # Prevent odd behavior if these are set in the environment for some reason.
-unset class protocol
+unset class protocol version
 # Initialize handlers and classes as associative arrays.
 declare -A match_handlers class_handlers ext_classes
-
-# Internal variables.
-version=20120217-4
-self=$0
-curl="curl -s --netrc-optional --connect-timeout $timeout"
-notify=$(type -p notify-send)
+# Configuration file version will be checked against this version.
+version=20120217-1
 
 # Create a default configuration file if it is missing or empty.
 if [[ ! -f "$config" ]] || [[ "$(stat -tc '%s' "$config")" -lt 5 ]]; then
@@ -442,6 +445,20 @@ fi
 
 # Load the configuration.
 . "$config"
+
+# Make sure configuration is the correct version so we won't break anything.
+if [[ $config_version != $version ]]; then
+    warning "Your config file is incompatable."
+    info "Use -c to back-up and create a new config, then review changes."
+    fatal "Incompatable config file."
+fi
+
+# Internal variables for use by functions.
+# Overwrite version with the actual application version.
+version=20120217-4
+self=$0
+curl="curl -s --netrc-optional --connect-timeout $timeout"
+notify=$(type -p notify-send)
 
 # Handle command-line options.
 while getopts hvqkct:p: opt; do
