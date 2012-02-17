@@ -1,139 +1,78 @@
 #!/bin/bash
-### wvm-handler:  File/URL Handler ####
-# Version 20120217-1 by Scott Garrett #
+### wvm-open:  File/URL Handler ####
+# Version 20120217-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Dependencies:
-# - Bash >= 4.1.9
-# Todo:
-# - Finish commenting
+# - bash >= 4.1.9
+# - bsdtar
+#
+# Changelog:
+# + 20120217-2
+#   - Handlers and classes now written to configuration file, instead.
+#   - Minor bug-fixes and corrections.
 
-shopt -s nocasematch
-shopt -s extglob
-
-version=20120217-1
+# Curl connection timeout.
 timeout=10
-config="$HOME/.config/wvm-handler/config"
-tmp='/tmp'
 
-DISPLAY=':0.0'
-PATH+=":$HOME/bin"
+# Path to configuration file.
+config="$HOME/.config/wvm-open/config"
+
+# Path to temporary directory.
+tmp="/tmp/wvm-open_$USER"
+
 # Let's not recurse our way to hell if the BROWSER env is set to this binary.
-# (Which it is, on my machine.  :P)
-[[ $BROWSER == @(*/|'')"${0##*/}" ]] &&
+# (Modifying it here will not affect the variable outside of this script.)
+[[ $BROWSER == @(*/|)"${0##*/}" ]] &&
     unset BROWSER
-if pidof X > /dev/null; then
+
+# Set BROWSER (if it isn't already set) depending on whether X is running.
+# We'll check to see if X is actually running, too, because DISPLAY can be
+# forced.
+if [[ $DISPLAY ]] && pidof X > /dev/null; then
     BROWSER=${BROWSER:-firefox}
 else
     BROWSER=${BROWSER:-elinks}
 fi
-# Open with <binary> if a string in [<matches>] fits the URL or path.
-declare -A match_handlers=(
-    ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
-)
-
-# Open [<class>] with <binary>.
-declare -A class_handlers=(
-    ['image/*']='mirage'
-    ['*/ogg */octet-stream audio/* video/*']='urxvt -e mplayer'
-    ['*/vnd.oasis.* */vnd.ms-* */vnd.openxml* */msword']='libreoffice'
-    ['*/pdf */postscript']='zathura'
-    ['*/text */css */plain']='gvim'
-    ['application/zip']='handle_zip'
-    ['magnet']='qbittorrent'
-    ['dir']=$BROWSER
-    ['default']=$BROWSER
-)
-
-# Map [<extensions>] to <class>.
-declare -A ext_classes=(
-    ['ahx mod s3m xm 669 med mtm it stm']='audio/x-mod'
-    ['asc c cfg conf cpp log spec txt text']='text/plain'
-    ['asf']='video/x-ms-asf'
-    ['asx']='video/x-ms-asf'
-    ['avi']='video/x-msvideo'
-    ['bz2 tbz']='application/x-bzip'
-    ['class']='application/octet-stream'
-    ['css']='text/css'
-    ['doc']='application/msword'
-    ['dtd']='text/xml'
-    ['dvi']='application/x-dvi'
-    ['flac']='audio/flac'
-    ['flv']='video/x-flv'
-    ['gif']='image/gif'
-    ['gz tgz']='application/x-gzip'
-    ['htm html']='text/html'
-    ['jpg jpeg']='image/jpeg'
-    ['js']='text/javascript'
-    ['m3u']='audio/x-mpegurl'
-    ['mov qt']='video/quicktime'
-    ['mp3']='audio/mpeg'
-    ['mp4']='video/mp4'
-    ['mpg mpeg']='video/mpeg'
-    ['odc']='application/vnd.oasis.opendocument.chart'
-    ['odf']='application/vnd.oasis.opendocument.formula'
-    ['odg']='application/vnd.oasis.opendocument.graphics'
-    ['odi']='application/vnd.oasis.opendocument.image'
-    ['odm']='application/vnd.oasis.opendocument.text-master'
-    ['odp']='application/vnd.oasis.opendocument.presentation'
-    ['ods']='application/vnd.oasis.opendocument.spreadsheet'
-    ['odt']='application/vnd.oasis.opendocument.text'
-    ['oga ogg ogv']='audio/ogg'
-    ['otc']='application/vnd.oasis.opendocument.chart-template'
-    ['otf']='application/vnd.oasis.opendocument.formula-template'
-    ['otg']='application/vnd.oasis.opendocument.graphics-template'
-    ['oth']='application/vnd.oasis.opendocument.text-web'
-    ['oti']='application/vnd.oasis.opendocument.image-template'
-    ['otp']='application/vnd.oasis.opendocument.presentation-template'
-    ['ots']='application/vnd.oasis.opendocument.spreadsheet-template'
-    ['ott']='application/vnd.oasis.opendocument.text-template'
-    ['pac']='application/x-ns-proxy-autoconfig'
-    ['pdf']='application/pdf'
-    ['png']='image/png'
-    ['ppt']='application/vnd.ms-powerpoint'
-    ['ps']='application/postscript'
-    ['sig']='application/pgp-signature'
-    ['spl']='application/futuresplash'
-    ['swf']='application/x-shockwave-flash'
-    ['tar z']='application/x-tar'
-    ['torrent']='application/x-bittorrent'
-    ['wav']='audio/x-wav'
-    ['wax']='audio/x-ms-wax'
-    ['wma']='audio/x-ms-wma'
-    ['wmv']='video/x-ms-wmv'
-    ['xbm']='image/x-xbitmap'
-    ['xls']='application/vnd.ms-excel'
-    ['xml']='text/xml'
-    ['xpm']='image/x-xpixmap'
-    ['xwd']='image/x-xwindowdump'
-    ['zip mdz xmz s3z']='application/zip'
-    ['default']='application/octet-stream'
-)
-
 
 
 #########################
 ### Handler Functions ###
 #########################
-handle_zip () {
+wvm-open_browser () {
+    launch "$BROWSER" "$1"
+}
+
+wvm-open_zip () {
+    # Complain if bsdtar isn't installed.
     if ! type -p bsdtar > /dev/null; then
         error 'bsdtar not installed.'
         return 1
     fi
+    # If the input filename doesn't have a class for its file extension so
+    # that we can name it something sane, try to get a suggested file name
+    # from the server.
     ext_class "$1" || base=$(remote_name "$1")
+    # If the server doesn't give one, then just use the input filename as is.
     base=${base:-"${1##*/}"}
-    path="$tmp/url-handler_$USER"
+    # Name of the directory extracted archive contents will be put.
     contents="$base.contents"
-    mkdir -p "$path/$contents"
-    cd "$path"
+    # Create the directories if they don't exist...
+    mkdir -p "$tmp/$contents"
+    # ...and dive into the temp directory.
+    cd "$tmp"
+    # Download the archive file and extract it.
     info "Downloading '$base' to '$path'..."
     if $curl -o "$base" "$1"; then
         info "Extracting '$base'..."
         if bsdtar -xf "$base" -C "$contents"; then
+            # If successful, count the files that have extensions.
             filecount=$(find "$contents" -name '*.*' -type f | wc -l)
             if [[ $filecount -le 2 ]]; then
+                # If there are two or less, try to open them with the handler.
                 exec "$self" "$contents"/*.*
             else
+                # Otherwise, let the user browse the archive.
                 info 'Too many files; launching directory browser...'
                 launch $(handler_of 'dir') "$path/$contents"
             fi
@@ -163,12 +102,10 @@ info () {
     [[ $notify ]] &&
         $notify -t 5000 "$1" &> /dev/null
 }
-
 error () {
     info "Error: ${1:-'Unexpected error.'}"
     return 1
 }
-
 fatal () {
     info "FATAL: ${1:-'Unexpected failure.'}"
     exit 1
@@ -256,24 +193,146 @@ handler_of () {
 # detached from the shell and terminal.  Functions will be exempt from this.
 launch () {
     ftype=$(type -t "$1")
+    # Return error if command not found.
     [[ -z $ftype ]] &&
         return 1
     if [[ $ftype != 'function' ]]; then
+        # Just run the handler (and replace this process) if no_detach is set.
         [[ $no_detach ]] &&
             exec "$@"
+        # Otherwise, pretend this is a non-interactive terminal (to keep
+        # scripts that detect this incorrectly from breaking) and run the
+        # handler in the background, detatched from the shell.
         export TERM='dumb'
         unset PS1
         "$@" </dev/null &>/dev/null & disown
     else
+        # We don't want to detach handler functions.
         "$@"
     fi
 }
 
+# Writes default config file.
+default_config () {
+    mkdir -p "${config%/*}"
+    cat <<'EOF' > "$config"
+# vim: set filetype=sh ts=4 expandtab
+
+# Open with <command|function> if a string in [<matches>] fits the URL or path.
+match_handlers=(
+    ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
+)
+
+# Open [<classes>] with <command|function>.
+class_handlers=(
+    ['image/*']='mirage'
+    ['*/ogg */octet-stream audio/* video/*']='urxvt -e mplayer'
+    ['*/vnd.oasis.* */vnd.ms-* */vnd.openxml* */msword']='libreoffice'
+    ['*/pdf */postscript']='zathura'
+    ['*/text */css */plain']='gvim'
+    ['application/zip']='wvm-open_zip'
+    ['magnet']='qbittorrent'
+    ['dir']='wvm-open_browser'
+    ['default']='wvm-open_browser'
+)
+
+# Map [<extensions>] to <class>.
+ext_classes=(
+    ['ahx mod s3m xm 669 med mtm it stm']='audio/x-mod'
+    ['asc c cfg conf cpp log spec txt text']='text/plain'
+    ['asf']='video/x-ms-asf'
+    ['asx']='video/x-ms-asf'
+    ['avi']='video/x-msvideo'
+    ['bz2 tbz']='application/x-bzip'
+    ['class']='application/octet-stream'
+    ['css']='text/css'
+    ['doc']='application/msword'
+    ['dtd']='text/xml'
+    ['dvi']='application/x-dvi'
+    ['flac']='audio/flac'
+    ['flv']='video/x-flv'
+    ['gif']='image/gif'
+    ['gz tgz']='application/x-gzip'
+    ['htm html']='text/html'
+    ['jpg jpeg']='image/jpeg'
+    ['js']='text/javascript'
+    ['m3u']='audio/x-mpegurl'
+    ['mov qt']='video/quicktime'
+    ['mp3']='audio/mpeg'
+    ['mp4']='video/mp4'
+    ['mpg mpeg']='video/mpeg'
+    ['odc']='application/vnd.oasis.opendocument.chart'
+    ['odf']='application/vnd.oasis.opendocument.formula'
+    ['odg']='application/vnd.oasis.opendocument.graphics'
+    ['odi']='application/vnd.oasis.opendocument.image'
+    ['odm']='application/vnd.oasis.opendocument.text-master'
+    ['odp']='application/vnd.oasis.opendocument.presentation'
+    ['ods']='application/vnd.oasis.opendocument.spreadsheet'
+    ['odt']='application/vnd.oasis.opendocument.text'
+    ['oga ogg ogv']='audio/ogg'
+    ['otc']='application/vnd.oasis.opendocument.chart-template'
+    ['otf']='application/vnd.oasis.opendocument.formula-template'
+    ['otg']='application/vnd.oasis.opendocument.graphics-template'
+    ['oth']='application/vnd.oasis.opendocument.text-web'
+    ['oti']='application/vnd.oasis.opendocument.image-template'
+    ['otp']='application/vnd.oasis.opendocument.presentation-template'
+    ['ots']='application/vnd.oasis.opendocument.spreadsheet-template'
+    ['ott']='application/vnd.oasis.opendocument.text-template'
+    ['pac']='application/x-ns-proxy-autoconfig'
+    ['pdf']='application/pdf'
+    ['png']='image/png'
+    ['ppt']='application/vnd.ms-powerpoint'
+    ['ps']='application/postscript'
+    ['sig']='application/pgp-signature'
+    ['spl']='application/futuresplash'
+    ['swf']='application/x-shockwave-flash'
+    ['tar z']='application/x-tar'
+    ['torrent']='application/x-bittorrent'
+    ['wav']='audio/x-wav'
+    ['wax']='audio/x-ms-wax'
+    ['wma']='audio/x-ms-wma'
+    ['wmv']='video/x-ms-wmv'
+    ['xbm']='image/x-xbitmap'
+    ['xls']='application/vnd.ms-excel'
+    ['xml']='text/xml'
+    ['xpm']='image/x-xpixmap'
+    ['xwd']='image/x-xwindowdump'
+    ['zip mdz xmz s3z']='application/zip'
+    ['default']='application/octet-stream'
+)
+EOF
+}
+
+# Display all defined handlers.
+show_handlers () {
+    echo
+    echo '### Match Handlers ###'
+    for strings in "${!match_handlers[@]}"; do
+        echo "Matches: $strings"
+        echo "Handler: ${match_handlers["$strings"]}"
+        echo
+    done
+    echo
+    echo '### Class Handlers ###'
+    for classes in "${!class_handlers[@]}"; do
+        echo "Classes: $classes"
+        echo "Handler: ${class_handlers["$classes"]}"
+        echo
+    done
+    echo
+    echo '### Extension Classes ###'
+    for exts in "${!ext_classes[@]}"; do
+        echo "   Exts: $exts"
+        echo "  Class: ${ext_classes["$exts"]}"
+        echo
+    done
+    exit 2
+}
 
 # Display usage text.
 usage () {
     cat <<EOF
-wvm-handler: General-Purpose File and URL Handler
+wvm-open: General-Purpose File and URL Handler
 Version $version by Scott Garrett
 Wintervenom [(at)] archlinux.us
 
@@ -289,7 +348,7 @@ Syntax: ${self##*/} [options] <file|url> [file|url ...]
     -v      Print currently-defined handlers.
 
 Configuration:
-    Stored in ~/.config/wvm-handler/config and sourced at
+    Stored in $config and sourced at
     run-time, can be used to override default handlers for
     path/URL matches, class handlers, and file extension-
     to-class map (extension classes).
@@ -328,7 +387,7 @@ Configuration:
     Class Handler Example
         class_handlers=(
             ['classis and media/types']='binary-or-function'
-            # Match a edia type...
+            # Match a media type...
             ['*/text */css */plain']='gvim'
             # ...and/or a protocol...
             ['magnet']='qbittorrent'
@@ -352,47 +411,23 @@ EOF
     exit 2
 }
 
-# Display all defined handlers.
-show_handlers () {
-    echo
-    echo '### Match Handlers ###'
-    for strings in "${!match_handlers[@]}"; do
-        echo "Matches: $strings"
-        echo "Handler: ${match_handlers["$strings"]}"
-        echo
-    done
-    echo
-    echo '### Class Handlers ###'
-    for classes in "${!class_handlers[@]}"; do
-        echo "Classes: $classes"
-        echo "Handler: ${class_handlers["$classes"]}"
-        echo
-    done
-    echo
-    echo '### Extension Classes ###'
-    for exts in "${!ext_classes[@]}"; do
-        echo "   Exts: $exts"
-        echo "  Class: ${ext_classes["$exts"]}"
-        echo
-    done
-    exit 2
-}
 
 
 ############
 ### Main ###
 ############
+# Prevent odd behavior if these are set in the environment for some reason.
 unset class protocol
+# Initialize handlers and classes as associative arrays.
+declare -A match_handlers class_handlers ext_classes
+
+# Internal variables.
+version=20120217-2
 self=$0
 curl="curl -s --netrc-optional --connect-timeout $timeout"
 notify=$(type -p notify-send)
 
-# Load configuration (create config file if needed).
-mkdir -p "${config%/*}"
-[[ ! -f "$config" ]] &&
-    touch "$config"
-. "$config"
-
+# Handle command-line options.
 while getopts hvqkt:p: opt; do
     case "$opt" in
         t)
@@ -415,52 +450,106 @@ while getopts hvqkt:p: opt; do
             ;;
     esac
 done
+# Display usage text if there aren't any arguments at all.
 [[ -z $1 ]] &&
     usage
+
+# Create a default configuration file if it is missing or empty.
+if [[ ! -f "$config" ]] || [[ "$(stat -tc '%s' "$config")" -lt 5 ]]; then
+    default_config
+fi
+
+# Load the configuration.
+. "$config"
+
+# If we're running in a non-interactive SSH session, set a DISPLAY so notices
+# will still be displayed on the correct machine.
+[[ $SSH_CLIENT && $- != *i* ]] &&
+    DISPLAY=${x_display:-':0.0'}
+
+# Add a user binary directory if one isn't present.
+[[ $PATH != *"$HOME/bin"* ]] &&
+    PATH+=":$HOME/bin"
+
+# Make the job of matching easier.
+shopt -s nocasematch
+shopt -s extglob
+
 for file in "$@"; do
     base=${file##*/}
+    # If a class override hasn't been set...
     if [[ -z $class ]]; then
+        # Figure out the protocol is being used in case the file is actually a
+        # URL (and the user isn't overriding it).
         if [[ -z $protocol && $file =~ ':' ]]; then
             protocol=${file%%:*}
         else
             protocol=${protocol:-file}
         fi
         info "Identifying '$base'..."
+        # Is there a match handler for the file path or URL?
         command=$(handler_of "$file")
         if [[ $? == 0 ]]; then
+            # If so, take note of that.
             class='match'
         else
+            # If not, then we need to figure out the class of the file.
+            # First, let's try to get its media type.
             case "$protocol" in
                 file)
                     file=${file##*:}
+                    # If the file exists, grab that info from 'file'.
+                    # Otherwise, maybe this file is actually an HTTP(S) URL.
                     if [[ -f $file ]]; then
                         class=$(file -bN --mime-type "$file")
+                    # Complain if we really can't tell that's what it is.
                     elif [[ ! ${file%%/*} =~ ^[[:alnum:]_.-]+$ ]]; then
                         fatal "'$file' isn't a file or valid URL.  Did you forget to prepend a protocol?'"
                     fi
+                    # Continue onto the next case action.
                     ;&
                 @(http|https))
+                    # If the previous case action found a class, skip this.
                     if [[ -z $class ]]; then
+                        # Otherwise, note when we started and try to ask the
+                        # server what the media type of this URL is.
                         start_time=$SECONDS
                         class=$(remote_type "$file")
+                        # If the server won't tell us that, maybe it will
+                        # suggest a file name that we can use the extension
+                        # of?
                         if [[ -z $class ]]; then
                             filename=$(remote_name "$file")
+                            # If the sever still shrugs at us, just use the
+                            # filename.
                             class=$(ext_class "${filename:-$file}")
                         fi
-                        ((SECONDS - start_time > timeout)) &&
-                            fatal "'$file' seems to be down."
+                        # If it took more time than twice the timeout (once for
+                        # each attempt to ask for the type and name from the
+                        # server), the server is most likely down.
+                        if ((SECONDS - start_time > timeout)); then
+                            error "'$file' seems to be offline."
+                            continue
+                        fi
                     fi
                     ;;
                 ftp)
+                    # We can be lazy here and just use the file extension of
+                    # the file.
                     class=$(ext_type "$file")
                     ;;
                 *)
+                    # If we don't know what protocol this path is, if it is a
+                    # URL, set the class to the protocol and let a handler
+                    # deal with it.
                     class=$protocol
                     ;;
             esac
+        # Get the handler for whatever class we determined the file to be.
         command=$(handler_of "$class")
         fi
     fi
+    # Launch the rocket!
     info "Opening '$base' ($class) with '$command'"
     launch $command "$file"
 done
