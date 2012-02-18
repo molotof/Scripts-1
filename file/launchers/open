@@ -1,6 +1,6 @@
 #!/bin/bash
-### wvm-open:  File/URL Handler ####
-# Version 20120217-4 by Scott Garrett #
+### wvm-open: File/URL Launcher #######
+# Version 20120217-5 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Dependencies:
@@ -18,8 +18,11 @@
 # + 20120217-4
 #   - Handle user options *after* loading configuration/overrides.
 # + 20120217-5
-#   - Change zip handler to deal with most archives by default.
+#   - Change zip handler to deal with supported archives by default.
 #   - Handle launching binary files and XDG shortcuts.
+#   - Don't count option flags as part of the file list (oops).
+#   - Fixed class-overrides not working.
+#   - Extension classes will be used first before media type.
 
 # Curl connection timeout.
 timeout=10
@@ -29,6 +32,13 @@ config="$HOME/.config/wvm-open/config"
 
 # Path to temporary directory.
 tmp="/tmp/wvm-open_$USER"
+
+# Paths to XDG shortcut directories.
+xdg_paths=(
+    "$HOME/.local/share/applications"
+    /usr/local/share/applications
+    /usr/share/applications
+)
 
 # Let's not recurse our way to hell if the BROWSER env is set to this binary.
 # (Modifying it here will not affect the variable outside of this script.)
@@ -48,14 +58,68 @@ fi
 #########################
 ### Handler Functions ###
 #########################
-wvm-open_browser () {
-    launch "$BROWSER" "$1"
+wvm-open_file () {
+    local handler file=$1
+    if [[ -d "$file" ]]; then
+        # Use the BROWSER if there's not a handler for directories.
+        handler=$(handler_of 'dir') ||
+            handler=$BROWSER
+        # Prevent 'Inception' from happening in case someone was silly.
+        [[ $handler == $FUNCNAME ]] &&
+            handler=$BROWSER
+        launch $handler "$file"
+    else
+        # If there's an executable of the same name in the current path,
+        # give it dibs.
+        [[ -x "./$file" ]] &&
+            file="./$file"
+        # Launch file directly if it is executable or in PATH.
+        if [[ -x "$file" ]] || inpath "$file" > /dev/null; then
+            launch "$file"
+        else
+            launch "$BROWSER" "$file"
+        fi
+    fi
+}
+
+wvm-open_shortcut () {
+    local file shortcut name command
+    if [[ -f "$1" ]]; then
+        # Snip the command from the desktop shortcut.
+        file=$(awk -F'=' '/^Exec/{sub(/ %.*$/, "", $2); print $2}' "$1")
+    else
+        # Case-insensetive search for a deskpot shortcut with a friendly
+        # name that matches the query.
+        query=${1,,}
+        query=${query//\//\\\/}
+        for shortcut in $(printf '%s/*.desktop\n' "${xdg_paths[@]}"); do
+            # Awk: Only return the command if the name actually matched
+            # in one of the files.
+            file=$(awk -F'=' '
+                $1 == "Name" {sub(/Name=/, "", $0); name=$0}
+                $1 == "Exec" {sub(/Exec=/, "", $0); exec=$0}
+                END {
+                    if (tolower(name) !~ /'"$query"'/) exit
+                    sub(/ %.*$/, "", exec)
+                    print exec
+                }
+            ' "$shortcut" 2&> /dev/null)
+            [[ $file ]] &&
+                break
+        done
+    fi
+    if [[ $file ]]; then
+        info "Opening '${file##*/}'..."
+        launch $file
+    else
+        error "No '$query' shortcut found."
+    fi
 }
 
 wvm-open_archive () {
     local file base contents filecount
     # Complain if bsdtar isn't installed.
-    if ! type -p bsdtar > /dev/null; then
+    if ! inpath bsdtar > /dev/null; then
         error 'bsdtar not installed.'
         return 1
     # Otherwise, make sure input file isn't local.  If it's not, try to
@@ -119,6 +183,12 @@ error () {
 fatal () {
     info "FATAL: ${1:-'Unexpected failure.'}"
     exit 1
+}
+
+# inpath <executable>
+# Quietly returns, by status code, whether <executable> is in PATH.
+inpath () {
+    type -p "$1" > /dev/null
 }
 
 # remote_type <url>
@@ -227,6 +297,20 @@ default_config () {
     mkdir -p "${config%/*}"
     cat <<'EOF' > "$config"
 # vim: set filetype=sh ts=4 expandtab
+
+# Curl timeout
+timeout=10
+
+# Path to temporary directory.
+tmp="/tmp/wvm-open_$USER"
+
+# Paths to XDG shortcut directories.
+xdg_paths=(
+    "$HOME/.local/share/applications"
+    /usr/local/share/applications
+    /usr/share/applications
+)
+
 # Open with <command|function> if a string in [<matches>] fits the URL or path.
 match_handlers=(
     ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
@@ -239,10 +323,12 @@ class_handlers=(
     ['*/vnd.oasis.* */vnd.ms-* */vnd.openxml* */msword']='libreoffice'
     ['*/pdf */postscript']='zathura'
     ['*/text */css */plain']='gvim'
-    ['application/zip']='wvm-open_zip'
+    ['application/*zip ']='wvm-open_archive'
     ['magnet']='qbittorrent'
-    ['dir']='wvm-open_generic'
-    ['default']='wvm-open_generic'
+    ['windows_binary']='wine'
+    ['shortcut']='wvm-open_shortcut'
+    ['executable']='wvm-open_file'
+    ['default']='wvm-open_file'
 )
 
 # Map [<extensions>] to <class>.
@@ -255,9 +341,11 @@ ext_classes=(
     ['bz2 tbz']='application/x-bzip'
     ['class']='application/octet-stream'
     ['css']='text/css'
+    ['desktop']='shortcut'
     ['doc']='application/msword'
     ['dtd']='text/xml'
     ['dvi']='application/x-dvi'
+    ['exe']='windows_binary'
     ['flac']='audio/flac'
     ['flv']='video/x-flv'
     ['gif']='image/gif'
@@ -311,10 +399,10 @@ ext_classes=(
 )
 
 EOF
-    cat <<EOF >> "$config"
-# Don't change this unless you know what you're doing.
-config_version=$version
-EOF
+    info "Configuration file created ($config).
+You may want to edit this, first.
+See -h for more info."
+    exit 2
 }
 
 # Display all defined handlers.
@@ -346,7 +434,7 @@ show_handlers () {
 # Display usage text.
 usage () {
     cat <<EOF
-wvm-open: General-Purpose File and URL Handler
+wvm-open: General-Purpose File and URL Launcher
 Version $version by Scott Garrett
 Wintervenom [(at)] archlinux.us
 
@@ -380,14 +468,18 @@ Configuration:
     need to be assigned an extension class if it is not a
     protocol.
 
-    Extension classes will be used if a media type is not
-    availble for a file (as in the case of custom classes).
-    File extensions will be assigned the given class.
+    Extension classes are used to translate file extensions to
+    classes.  They will be used first before trying to identify
+    a file by its media type and using that as its class, so
+    that you will be able to use custom class names without the
+    media type class overriding them.
 
-    As previously mentioned, match and class handlers can use
-    functions, and you can define these in the configuration.
-    A zip handler function is built-in (and can be overridden
-    with a different match_handler definition).
+    As previously mentioned, the handlers can use Bash functions
+    to open files and you can define those in the configuration
+    file.  The built-in handler functions take care of archives
+    (wvm-open_archive), XDG shortcuts (wvm-open_shortcut), and
+    generic files, executables and directories (wvm-open_file).
+    These can be overridden with in the match_handler setting.
 
     Match Handler Example
         match_handlers=(
@@ -435,8 +527,12 @@ EOF
 unset class protocol version
 # Initialize handlers and classes as associative arrays.
 declare -A match_handlers class_handlers ext_classes
-# Configuration file version will be checked against this version.
-version=20120217-1
+
+# Internal variables for use by functions.
+version=20120217-5
+self=$0
+curl="curl -s --netrc-optional --connect-timeout $timeout"
+notify=$(type -p notify-send)
 
 # Create a default configuration file if it is missing or empty.
 if [[ ! -f "$config" ]] || [[ "$(stat -tc '%s' "$config")" -lt 5 ]]; then
@@ -445,20 +541,6 @@ fi
 
 # Load the configuration.
 . "$config"
-
-# Make sure configuration is the correct version so we won't break anything.
-if [[ $config_version != $version ]]; then
-    warning "Your config file is incompatable."
-    info "Use -c to back-up and create a new config, then review changes."
-    fatal "Incompatable config file."
-fi
-
-# Internal variables for use by functions.
-# Overwrite version with the actual application version.
-version=20120217-4
-self=$0
-curl="curl -s --netrc-optional --connect-timeout $timeout"
-notify=$(type -p notify-send)
 
 # Handle command-line options.
 while getopts hvqkct:p: opt; do
@@ -480,13 +562,13 @@ while getopts hvqkct:p: opt; do
             ;;
         c)
             default_config
-            exit
             ;;
         *)
             usage
             ;;
     esac
 done
+shift $((OPTIND - 1))
 # Display usage text if there aren't any arguments at all.
 [[ -z $1 ]] &&
     usage
@@ -517,8 +599,8 @@ for file in "$@"; do
         fi
         info "Identifying '$base'..."
         # Is there a match handler for the file path or URL?
-        command=$(handler_of "$file")
-        if [[ $? == 0 ]]; then
+        command=$(handler_of "$file") || unset command
+        if [[ $command ]]; then
             # If so, take note of that.
             class='match'
         else
@@ -528,31 +610,41 @@ for file in "$@"; do
                 file)
                     file=${file##*:}
                     # If the file exists, grab that info from 'file'.
-                    # Otherwise, maybe this file is actually an HTTP(S) URL.
                     if [[ -f $file ]]; then
-                        class=$(file -bN --mime-type "$file")
+                        # See if there is an extension class, first, and, if
+                        # not, use the media type.
+                        class=$(ext_class "$file") ||
+                            class=$(file -bN --mime-type "$file")
+                    # Otherwise, maybe this file is actually dir or executable.
+                    elif [[ -d "$file" ]] || inpath "$file" > /dev/null; then
+                        info "Opening '$file'."
+                        launch $(handler_of 'executable') "$file"
+                        continue
+                    # Or, maybe, it's a shortcut.
+                    elif [[ $file != *'/'* ]]; then
+                        launch $(handler_of 'shortcut') "$file"
+                        continue
                     # Complain if we really can't tell that's what it is.
                     elif [[ ! ${file%%/*} =~ ^[[:alnum:]_.-]+$ ]]; then
                         fatal "'$file' isn't a file or valid URL.  Did you forget to prepend a protocol?'"
                     fi
-                    # Continue onto the next case action.
+                    # If it made it this far, it was probably a URL, so...
+                    # continue onto the next case action.
                     ;&
                 @(http|https))
                     # If the previous case action found a class, skip this.
                     if [[ -z $class ]]; then
-                        # Otherwise, note when we started and try to ask the
-                        # server what the media type of this URL is.
+                        # Otherwise, note when we started and ask the server
+                        # what class of file this is.  Try to use the remote
+                        # file name's extension, first, but that won't work,
+                        # ask for the media type, falling back to the original
+                        # filename's extension.
                         start_time=$SECONDS
-                        class=$(remote_type "$file")
-                        # If the server won't tell us that, maybe it will
-                        # suggest a file name that we can use the extension
-                        # of?
-                        if [[ -z $class ]]; then
-                            filename=$(remote_name "$file")
-                            # If the sever still shrugs at us, just use the
-                            # filename.
-                            class=$(ext_class "${filename:-$file}")
-                        fi
+                        filename=$(remote_name "$file")
+                        class=$(ext_class "${filename:-$file}") || {
+                            mtype=$(remote_type "$file") &&
+                                class=$mtype
+                        }
                         # If it took more time than twice the timeout (once for
                         # each attempt to ask for the type and name from the
                         # server), the server is most likely down.
@@ -565,7 +657,7 @@ for file in "$@"; do
                 ftp)
                     # We can be lazy here and just use the file extension of
                     # the file.
-                    class=$(ext_type "$file")
+                    class=$(ext_class "$file")
                     ;;
                 *)
                     # If we don't know what protocol this path is, if it is a
@@ -574,11 +666,11 @@ for file in "$@"; do
                     class=$protocol
                     ;;
             esac
-        # Get the handler for whatever class we determined the file to be.
-        command=$(handler_of "$class")
         fi
     fi
+    # Get the handler for whatever class we determined the file to be.
+    command=${command:-"$(handler_of "$class")"}
     # Launch the rocket!
-    info "Opening '$base' ($class) with '$command'"
+    info "Opening '$base' ($class) with '$command'."
     launch $command "$file"
 done
