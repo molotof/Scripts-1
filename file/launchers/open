@@ -1,10 +1,10 @@
 #!/bin/bash
 ### wvm-open: File/URL Launcher #######
-# Version 20120217-5 by Scott Garrett #
+# Version 20120217-6 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Dependencies:
-# - bash >= 4.1.9
+# - bash >= 4.1
 # - bsdtar
 #
 # Changelog:
@@ -23,6 +23,18 @@
 #   - Don't count option flags as part of the file list (oops).
 #   - Fixed class-overrides not working.
 #   - Extension classes will be used first before media type.
+# + 10120217-6
+#   - Fixed type-o punting Awk's stderr to /dev/null, breaking xDG handler.
+#   - No more using space-delimited keys to assign multiple classes/exts,
+#     for now, to make way for a better way of handling those.
+#   - The built-in handlers and classes have been made default and the
+#     extension classes re-instated instead of dumping them all in the
+#     default config, so they won't get broken between updates anymore.
+#     The user can override these in the configuration file.
+#     *** Users of previous versions of wvm-open need to create a new
+#     configuration file. ***
+#   - Don't give a fatal error if a file didn't get recognized in the file
+#     protocol.
 
 # Curl connection timeout.
 timeout=10
@@ -103,7 +115,7 @@ wvm-open_shortcut () {
                     sub(/ %.*$/, "", exec)
                     print exec
                 }
-            ' "$shortcut" 2&> /dev/null)
+            ' "$shortcut" 2> /dev/null)
             [[ $file ]] &&
                 break
         done
@@ -229,42 +241,42 @@ match () {
 # ext_class <path|file|extension>
 # Return the defined class type mapped to a file extension.
 # Also returns success exit code if a handler (that isn't 'default') was
-# found; error otherwise.  A handler in <match_handlers> gets dibs over
+# found; error otherwise.  A handler in <match_handler> gets dibs over
 # If the argument is a path or file, the extension of it will be used.
 ext_class () {
-    local ext=${1##*/} class
-    for exts in "${!ext_classes[@]}"; do
-        if match "${ext##*.}" $exts; then
-            echo "${ext_classes["$exts"]}"
+    local e=${1##*/} class
+    for ext in "${!ext_class[@]}"; do
+        if [[ ${e##*.} == $ext ]]; then
+            echo "${ext_class["$ext"]}"
             return 0
         fi
     done
-    echo "${ext_classes['default']}"
+    echo "${ext_class['default']}"
     return 1
 }
 
 # handler_of <match|class>
 # Returns the command defined to handle a match or class.
 # Also returns success exit code if a handler (that isn't 'default') was
-# found; error otherwise.  A handler in <match_handlers> gets dibs over
-# one in <class_handlers>.
+# found; error otherwise.  A handler in <match_handler> gets dibs over
+# one in <class_handler>.
 handler_of () {
-    local classes strings command
-    for strings in "${!match_handlers[@]}"; do
-        if match "$1" $strings; then
-            echo "${match_handlers["$strings"]}"
+    local string command
+    for string in "${!match_handler[@]}"; do
+        if [[ "$1" == $string ]]; then
+            echo "${match_handler["$string"]}"
             return 0
         fi
     done
     if [[ -z $command ]]; then
-        for classes in "${!class_handlers[@]}"; do
-            if match "$1" $classes; then
-                echo "${class_handlers["$classes"]}"
+        for string in "${!class_handler[@]}"; do
+            if [[ "$1" == $string ]]; then
+                echo "${class_handler["$string"]}"
                 return 0
             fi
         done
     fi
-    echo "${class_handlers['default']}"
+    echo "${class_handler['default']}"
     return 1
 }
 
@@ -298,106 +310,34 @@ default_config () {
     cat <<'EOF' > "$config"
 # vim: set filetype=sh ts=4 expandtab
 
-# Curl timeout
-timeout=10
+# Curl timeout (default: 10)
+#timeout=10
 
 # Path to temporary directory.
-tmp="/tmp/wvm-open_$USER"
+#tmp="/tmp/wvm-open_$USER"
 
-# Paths to XDG shortcut directories.
-xdg_paths=(
-    "$HOME/.local/share/applications"
-    /usr/local/share/applications
-    /usr/share/applications
-)
+# Extra paths to XDG shortcut directories.
+#xdg_paths+=("$HOME/Desktop")
 
 # Open with <command|function> if a string in [<matches>] fits the URL or path.
-match_handlers=(
-    ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
-)
+#match_handler['*tinyurl.com/*']='firefox -no-remote -private'
+#match_handler['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
 
 # Open [<classes>] with <command|function>.
-class_handlers=(
-    ['image/*']='mirage'
-    ['*/ogg */octet-stream audio/* video/*']='urxvt -e mplayer'
-    ['*/vnd.oasis.* */vnd.ms-* */vnd.openxml* */msword']='libreoffice'
-    ['*/pdf */postscript']='zathura'
-    ['*/text */css */plain']='gvim'
-    ['application/*zip ']='wvm-open_archive'
-    ['magnet']='qbittorrent'
-    ['windows_binary']='wine'
-    ['shortcut']='wvm-open_shortcut'
-    ['executable']='wvm-open_file'
-    ['default']='wvm-open_file'
-)
+#class_handler['*/@(ogg|octet-stream)']='urxvt -e mplayer'
+#class_handler['*/@(text|css|plain)']='gvim'
+#class_handler['*/msword']='libreoffice'
+#class_handler['*/pdf */postscript']='zathura'
+#class_handler['*/vnd.@(oasis|ms-|openxml)']='libreoffice'
+#class_handler['@(audio|video)/*']='urxvt -e mplayer'
+#class_handler['application/*zip ']='wvm-open_archive'
+#class_handler['image/*']='mirage'
+#class_handler['magnet']='qbittorrent'
 
 # Map [<extensions>] to <class>.
-ext_classes=(
-    ['ahx mod s3m xm 669 med mtm it stm']='audio/x-mod'
-    ['asc c cfg conf cpp log spec txt text']='text/plain'
-    ['asf']='video/x-ms-asf'
-    ['asx']='video/x-ms-asf'
-    ['avi']='video/x-msvideo'
-    ['bz2 tbz']='application/x-bzip'
-    ['class']='application/octet-stream'
-    ['css']='text/css'
-    ['desktop']='shortcut'
-    ['doc']='application/msword'
-    ['dtd']='text/xml'
-    ['dvi']='application/x-dvi'
-    ['exe']='windows_binary'
-    ['flac']='audio/flac'
-    ['flv']='video/x-flv'
-    ['gif']='image/gif'
-    ['gz tgz']='application/x-gzip'
-    ['htm html']='text/html'
-    ['jpg jpeg']='image/jpeg'
-    ['js']='text/javascript'
-    ['m3u']='audio/x-mpegurl'
-    ['mov qt']='video/quicktime'
-    ['mp3']='audio/mpeg'
-    ['mp4']='video/mp4'
-    ['mpg mpeg']='video/mpeg'
-    ['odc']='application/vnd.oasis.opendocument.chart'
-    ['odf']='application/vnd.oasis.opendocument.formula'
-    ['odg']='application/vnd.oasis.opendocument.graphics'
-    ['odi']='application/vnd.oasis.opendocument.image'
-    ['odm']='application/vnd.oasis.opendocument.text-master'
-    ['odp']='application/vnd.oasis.opendocument.presentation'
-    ['ods']='application/vnd.oasis.opendocument.spreadsheet'
-    ['odt']='application/vnd.oasis.opendocument.text'
-    ['oga ogg ogv']='audio/ogg'
-    ['otc']='application/vnd.oasis.opendocument.chart-template'
-    ['otf']='application/vnd.oasis.opendocument.formula-template'
-    ['otg']='application/vnd.oasis.opendocument.graphics-template'
-    ['oth']='application/vnd.oasis.opendocument.text-web'
-    ['oti']='application/vnd.oasis.opendocument.image-template'
-    ['otp']='application/vnd.oasis.opendocument.presentation-template'
-    ['ots']='application/vnd.oasis.opendocument.spreadsheet-template'
-    ['ott']='application/vnd.oasis.opendocument.text-template'
-    ['pac']='application/x-ns-proxy-autoconfig'
-    ['pdf']='application/pdf'
-    ['png']='image/png'
-    ['ppt']='application/vnd.ms-powerpoint'
-    ['ps']='application/postscript'
-    ['sig']='application/pgp-signature'
-    ['spl']='application/futuresplash'
-    ['swf']='application/x-shockwave-flash'
-    ['tar z']='application/x-tar'
-    ['torrent']='application/x-bittorrent'
-    ['wav']='audio/x-wav'
-    ['wax']='audio/x-ms-wax'
-    ['wma']='audio/x-ms-wma'
-    ['wmv']='video/x-ms-wmv'
-    ['xbm']='image/x-xbitmap'
-    ['xls']='application/vnd.ms-excel'
-    ['xml']='text/xml'
-    ['xpm']='image/x-xpixmap'
-    ['xwd']='image/x-xwindowdump'
-    ['zip mdz xmz s3z']='application/zip'
-    ['default']='application/octet-stream'
-)
-
+#ext_class['example']='text/plain'
+#ext_class['example2']='example_class'
+#ext_class['default']='application/octet-stream'
 EOF
     info "Configuration file created ($config).
 You may want to edit this, first.
@@ -409,23 +349,23 @@ See -h for more info."
 show_handlers () {
     echo
     echo '### Match Handlers ###'
-    for strings in "${!match_handlers[@]}"; do
+    for string in "${!match_handler[@]}"; do
         echo "  Matches: $strings"
-        echo "  Handler: ${match_handlers["$strings"]}"
+        echo "  Handler: ${match_handler["$strings"]}"
         echo
     done
     echo
     echo '### Class Handlers ###'
-    for classes in "${!class_handlers[@]}"; do
-        echo "  Classes: $classes"
-        echo "  Handler: ${class_handlers["$classes"]}"
+    for string in "${!class_handler[@]}"; do
+        echo "  Classes: $string"
+        echo "  Handler: ${class_handler["$string"]}"
         echo
     done
     echo
     echo '### Extension Classes ###'
-    for exts in "${!ext_classes[@]}"; do
-        echo "    Extns: $exts"
-        echo "    Class: ${ext_classes["$exts"]}"
+    for ext in "${!ext_class[@]}"; do
+        echo "    Extns: $ext"
+        echo "    Class: ${ext_class["$ext"]}"
         echo
     done
     exit 2
@@ -457,8 +397,7 @@ Configuration:
     to-class map (extension classes).
 
     Match handlers allow you to launch an executable or a
-    function if the path or URL matches a space-delimited
-    key of strings.
+    function if the path or URL matches a string.
 
     Class handlers launch an executable based on what class
     a file or URL is assigned to.  Classes can be either media
@@ -479,41 +418,36 @@ Configuration:
     file.  The built-in handler functions take care of archives
     (wvm-open_archive), XDG shortcuts (wvm-open_shortcut), and
     generic files, executables and directories (wvm-open_file).
-    These can be overridden with in the match_handler setting.
+    These can be overridden with in a match_handler.
 
-    Match Handler Example
-        match_handlers=(
-            ['strings to match']='binary-or-function'
-            # Handle YouTube video URLs with ytdl-mplayer.
-            ['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
-            # Handle files in 'special_files' or of the '.special'
-            # type with some-app.
-            ['/home/bluh/special_files/* *.special']='some-app'
-        )
+    Match Handler Examples
+        match_handler['string to match']='binary-or-function'
+        # Handle YouTube video URLs with ytdl-mplayer.
+        match_handler['*youtu@(.be/|be.com/@(watch|v))*']='ytdl-mplayer'
+        # Handle files in 'special_files' or of the '.special'
+        # type with some-app.
+        match_handler['/home/bluh/special_files/* *.special']='some-app'
 
     Class Handler Example
-        class_handlers=(
-            ['classis and media/types']='binary-or-function'
-            # Match a media type...
-            ['*/text */css */plain']='gvim'
-            # ...and/or a protocol...
-            ['magnet']='qbittorrent'
-            # ...or a custom class.
-            ['banana']='monkey'
-            # Map to a handler function.
-            ['application/zip']='handle_zip'
-        )
+        class_handler['class']='binary-or-function'
+        # Match a media type...
+        class_handler['text/*']='gvim'
+        # ...or a protocol...
+        class_handler['magnet']='qbittorrent'
+        # ...or a custom class.
+        class_handler['banana']='monkey'
+        # Map to a handler function.
+        class_handler['application/zip']='handle_zip'
 
     Extension Class Example
-        ext_classes=(
-            ['file_extension']='class-or-media-type'
-            # Assign 'avi' as 'video/x-msvideo' media type.
-            ['avi']='video/x-msvideo'
-            # Assign 'bz2' and 'tgz' to 'application/x-bzip'.
-            ['bz2 tbz']='application/x-bzip'
-            # Assign 'peel' extensions to a custom class.
-            ['peel']='banana'
-        )
+        ext_class['file_extension']='class-or-media-type'
+        # Assign 'avi' as 'video/x-msvideo' media type.
+        ext_class['avi']='video/x-msvideo'
+        # Assign 'bz2' and 'tgz' to 'application/x-bzip'.
+        ext_class['bz2']='application/x-bzip'
+        ext_class['tz2']='application/x-bzip'
+        # Assign 'peel' extensions to a custom class.
+        ext_class['peel']='banana'
 EOF
     exit 2
 }
@@ -525,11 +459,116 @@ EOF
 ############
 # Prevent odd behavior if these are set in the environment for some reason.
 unset class protocol version
-# Initialize handlers and classes as associative arrays.
-declare -A match_handlers class_handlers ext_classes
+# Initialize handlers and classes.
+
+# Open with <command|function> if a string in [<matches>] fits the URL or path.
+declare -A match_handler
+
+# Open [<classes>] with <command|function>.
+declare -A class_handler=(
+    ['default']='wvm-open_file'
+    ['application/*zip']='wvm-open_archive'
+    ['executable']='wvm-open_file'
+    ['shortcut']='wvm-open_shortcut'
+    ['windows_binary']='wine'
+)
+
+# Map [<extensions>] to <class>.
+declare -A ext_class=(
+    ['669']='audio/x-mod'
+    ['ahx']='audio/x-mod'
+    ['asc']='text/plain'
+    ['asf']='video/x-ms-asf'
+    ['asx']='video/x-ms-asf'
+    ['avi']='video/x-msvideo'
+    ['bz2']='application/x-bzip'
+    ['cfg']='text/plain'
+    ['class']='application/octet-stream'
+    ['conf']='text/plain'
+    ['cpp']='text/plain'
+    ['css']='text/css'
+    ['default']='application/octet-stream'
+    ['desktop']='shortcut'
+    ['doc']='application/msword'
+    ['dtd']='text/xml'
+    ['dvi']='application/x-dvi'
+    ['exe']='windows_binary'
+    ['flac']='audio/flac'
+    ['flv']='video/x-flv'
+    ['gif']='image/gif'
+    ['gz']='application/x-gzip'
+    ['htm']='text/html'
+    ['html']='text/html'
+    ['it']='audio/x-mod'
+    ['jpeg']='image/jpeg'
+    ['jpg']='image/jpeg'
+    ['js']='text/javascript'
+    ['log']='text/plain'
+    ['m3u']='audio/x-mpegurl'
+    ['mdz']='application/zip'
+    ['med']='audio/x-mod'
+    ['mod']='audio/x-mod'
+    ['mov qt']='video/quicktime'
+    ['mp3']='audio/mpeg'
+    ['mp4']='video/mp4'
+    ['mpeg']='video/mpeg'
+    ['mpg']='video/mpeg'
+    ['mtm']='audio/x-mod'
+    ['odc']='application/vnd.oasis.opendocument.chart'
+    ['odf']='application/vnd.oasis.opendocument.formula'
+    ['odg']='application/vnd.oasis.opendocument.graphics'
+    ['odi']='application/vnd.oasis.opendocument.image'
+    ['odm']='application/vnd.oasis.opendocument.text-master'
+    ['odp']='application/vnd.oasis.opendocument.presentation'
+    ['ods']='application/vnd.oasis.opendocument.spreadsheet'
+    ['odt']='application/vnd.oasis.opendocument.text'
+    ['oga']='audio/ogg'
+    ['ogg']='audio/ogg'
+    ['ogv']='audio/ogg'
+    ['otc']='application/vnd.oasis.opendocument.chart-template'
+    ['otf']='application/vnd.oasis.opendocument.formula-template'
+    ['otg']='application/vnd.oasis.opendocument.graphics-template'
+    ['oth']='application/vnd.oasis.opendocument.text-web'
+    ['oti']='application/vnd.oasis.opendocument.image-template'
+    ['otp']='application/vnd.oasis.opendocument.presentation-template'
+    ['ots']='application/vnd.oasis.opendocument.spreadsheet-template'
+    ['ott']='application/vnd.oasis.opendocument.text-template'
+    ['pac']='application/x-ns-proxy-autoconfig'
+    ['pdf']='application/pdf'
+    ['png']='image/png'
+    ['ppt']='application/vnd.ms-powerpoint'
+    ['ps']='application/postscript'
+    ['qt']='video/quicktime'
+    ['s3m']='audio/x-mod'
+    ['s3z']='application/zip'
+    ['sig']='application/pgp-signature'
+    ['spec']='text/plain'
+    ['spl']='application/futuresplash'
+    ['stm']='audio/x-mod'
+    ['swf']='application/x-shockwave-flash'
+    ['tar']='application/x-tar'
+    ['tbz']='application/x-bzip'
+    ['text']='text/plain'
+    ['tgz']='application/x-gzip'
+    ['torrent']='application/x-bittorrent'
+    ['txt']='text/plain'
+    ['wav']='audio/x-wav'
+    ['wax']='audio/x-ms-wax'
+    ['wma']='audio/x-ms-wma'
+    ['wmv']='video/x-ms-wmv'
+    ['xbm']='image/x-xbitmap'
+    ['xls']='application/vnd.ms-excel'
+    ['xm']='audio/x-mod'
+    ['xml']='text/xml'
+    ['xmz']='application/zip'
+    ['xpm']='image/x-xpixmap'
+    ['xwd']='image/x-xwindowdump'
+    ['z']='application/x-tar'
+    ['zip']='application/zip'
+)
 
 # Internal variables for use by functions.
-version=20120217-5
+version=20120217-6
 self=$0
 curl="curl -s --netrc-optional --connect-timeout $timeout"
 notify=$(type -p notify-send)
@@ -626,7 +665,8 @@ for file in "$@"; do
                         continue
                     # Complain if we really can't tell that's what it is.
                     elif [[ ! ${file%%/*} =~ ^[[:alnum:]_.-]+$ ]]; then
-                        fatal "'$file' isn't a file or valid URL.  Did you forget to prepend a protocol?'"
+                        error "'$file' isn't a file or valid URL.  You may need to prepend a protocol or need to force a class.'"
+                        continue
                     fi
                     # If it made it this far, it was probably a URL, so...
                     # continue onto the next case action.
