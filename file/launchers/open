@@ -40,6 +40,8 @@
 # + Plug-ins
 #   - 'printf' shortcuts for URLs
 #   - (keenerd) Handle multiple launchers.
+shopt -s nocasematch
+shopt -s extglob
 
 # Curl connection timeout.
 timeout=10
@@ -622,10 +624,6 @@ shift $((OPTIND - 1))
 # Add a user binary directory if one isn't present.
 [[ $PATH != *"$HOME/bin"* ]] &&
     PATH+=":$HOME/bin"
-
-# Make the job of matching easier.
-shopt -s nocasematch
-shopt -s extglob
 
 for file in "$@"; do
     base=${file##*/}
