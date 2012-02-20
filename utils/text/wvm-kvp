@@ -1,0 +1,552 @@
+#!/bin/bash
+### wvm-kvp: Key-Value Pair Editor ####
+# Version 20120220-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+
+version=20120920-1
+tmp="/tmp/desc-editor.txt"
+
+declare -A key buffer
+declare -a undo
+type -p nano > /dev/null &&
+    EDITOR=${EDITOR:-nano} ||
+    EDITOR=${EDITOR:-vi}
+
+
+
+########################
+### KVP File Parsing ###
+########################
+parse () {
+    local name data trash
+    key=()
+    if [[ ! -f "$1" ]]; then
+        echo "Not found."
+        return 1
+    fi
+    fmt=$(detect_fmt "$1" 2> /dev/null)
+    if [[ -z $fmt ]]; then
+        echo "Unknown format."
+        return 1
+    fi
+    while IFS=$'\t' read name data trash; do
+        [[ -z $name ]] &&
+            continue
+        name=${name,,}
+        if [[ ${key["$name"]} ]]; then
+            key["$name"]+=$'\n'"$data"
+        else
+            key["$name"]=$data
+        fi
+    done < <($"parse_kvp$fmt" "$1" 2> /dev/null)
+}
+
+detect_fmt () {
+    grep -v '#' "$1" | head -3 | awk '
+        /^[[:alnum:]_.-]+:/ {
+            print "2"
+            exit
+        }
+        /^[[:alnum:]_.-]+$/ {
+            print "1"
+            exit
+        }
+    '
+}
+
+parse_kvp1 () {
+    awk '
+        BEGIN {
+            name = ""
+        }
+        /^[[:alnum:]_.-]/ {
+            sub(/\s+$/, "", $0)
+            name = $0
+            next
+        }
+        {
+            if (!name)
+                next
+            sub(/^\s+/, "", $0)
+            sub(/\s+$/, "", $0)
+            gsub(/\t/, " ", $0)
+            printf "%s\t%s\n", name, $0
+        }
+    ' "$1"
+}
+
+parse_kvp2 () {
+    awk -F':' '
+        BEGIN {
+            name = ""
+        }
+        {
+            if (!name) {
+                if ($0 !~ /^[[:alnum:]_.-]+:/)
+                    next
+                if ($2 ~ /\s*>\s*/) {
+                    name = $1
+                    next
+                }
+                printf "%s\t", $1
+                sub(/^.*:\s*/, "", $0)
+                sub(/\s+$/, "", $0)
+                gsub(/\t/, "    ", $0)
+            } else if ($2 ~ /<\s*/) {
+                name = ""
+                next
+            } else printf "%s\t", name
+            print $0
+        }
+    ' "$1"
+}
+
+format_kvp1 () {
+    local name IFS=$'\n'
+    set -f
+    while read name; do
+        [[ -z $name ]] &&
+            continue
+        echo "$name"
+        printf '    %s\n' ${key["$name"]}
+    done < <(printf '%s\n' "${!key[@]}" | sort)
+    set +f
+}
+
+format_kvp2 () {
+    local name IFS=$'\n'
+    while read name; do
+        [[ -z $name ]] &&
+            continue
+        if [[ ${key["$name"]} != *$'\n'* ]]; then
+            echo "$name: ${key["$name"]}"
+        else
+            printf '%s\n' "$name: >" "${key["$name"]}" '<'
+        fi
+    done < <(printf '%s\n' "${!key[@]}" | sort)
+}
+
+format_buffer () {
+    local name
+    while IFS=$'\n' read name; do
+        [[ -z $name ]] &&
+            continue
+        if [[ ${buffer["$name"]} != *$'\n'* ]]; then
+            echo "$name: ${buffer["$name"]}"
+        else
+            printf '%s\n' "$name: >" "${buffer["$name"]}" '<'
+        fi
+    done < <(printf '%s\n' "${!buffer[@]}" | sort)
+}
+
+
+
+##################
+### Key Editor ###
+##################
+title () {
+    echo '------------------------------------------'
+    echo "wvm-kvp $version - Key-Value Pair Editor"
+    echo '------------------------------------------'
+}
+
+syntax () {
+    IFS=' ' echo "Syntax: $1 $(printf "<%s> " "${@:2}")"
+}
+
+cmd_usage () {
+    cat <<'EOF'
+    wvm-kvp - Key-Value Pair Editor Command Usage
+
+help
+    Aliases: h, cmds, commands
+    You are currently here.
+    Press [q] to return to the editor.
+
+add <key> <value>
+    Aliases: a, +
+    Appends value of a key, prefixed with a space
+    (if it isn't empty).  Will prompt for a value
+    if <value> is left blank.
+
+addln <key> [value]
+    Aliases: l, ;
+    Appends value of a key as a new line (if it
+    isn't empty).  If <value> is left blank, the
+    executable defined in $EDITOR will be used to
+    edit a value for the key, and the saved file
+    will be appended (with any blank lines at its
+    beginning or end removed) if it is not empty.
+
+set <key> [value]
+    Aliases: s, =
+    Sets the value of a key, replacing its value.
+    Same behavior as `addln` if <value> is left
+    blank, except contents of saved file replace
+    the current value if it is not empty.
+
+unset <key> (paste,p|both,b)
+    Aliases: u, -
+    Deletes a key (and its value).  If 'paste' or
+    'p' is added, deletes the key from the paste
+    buffer.  If 'both' or 'b' is added, deletes
+    the key from both buffers.
+
+copy <key> [as]
+    Aliases: c
+    Copies a key to the paste buffer, optionally
+    with a different key name (<as>).
+
+paste <key> [to]
+    Aliases: [p]
+    Pastes a key from the paste buffer, optionally
+    to a different key name than what was copied
+    (<to>).
+
+undo
+    Aliases: z
+    Restores KVPs to state before the last edit
+    operation.  Up to 50 changes are saved.
+
+redo
+    Aliases: y
+    Restores KVPs to state before the last undo
+
+rename <key> <to>
+    Aliases: r
+    Renames a key to something else (<to>).
+
+lowercase <key>
+    Aliases: l, lower
+    Lowercases the value of a key.
+
+uppercase <key>
+    Aliases: u, lower
+    Capitalizes the value of a key.
+
+sed <key> <script>
+    Aliases: %
+    Sets the value of a key to the result of a
+    Sed operation using <script>.  Sed will be
+    executed with extended regular expressions
+    enabled.
+
+format
+    Aliases: f, fmt
+    Toggles the KVP format between KVP1 and KVP2.
+
+write [filepath|.] (v1,1|v2,2)
+    Aliases: w, save
+    Writes KVP output to file, optionally to a
+    different <filepath> than what was opened.
+    '.' used as a file path will write to the
+    original file (default behavior).  Output
+    is written in whichever KVP version it was
+    opened in unless a KVP version is specified
+    after the file path ('v1'/'1' or 'v2'/'2').
+
+revert
+    Aliases: e
+    Revert to the last-saved state.
+
+next
+    Aliases: n, >
+    Move to the next file to edit (by index).
+
+prev
+    Aliases: v, <
+    Move to the last-edited file (by index).
+
+quit
+    Aliases: q, exit
+    Exits the editor.
+EOF
+}
+
+save_undo () {
+    undo=("$($"format_kvp$fmt")" "${undo[@]:0:49}")
+    redo=()
+    modified=1
+}
+
+key_editor () {
+    local cmd name data modified append
+    undo=()
+    redo=()
+    echo "Parsing: $1"
+    parse "$1" ||
+        return 1
+    while :; do
+        echo
+        echo "[KVP$fmt: ${1##*/}]"
+        $"format_kvp$fmt"
+        echo
+        echo
+        echo '[Paste Buffer]'
+        format_buffer
+        echo
+        read -p'> ' cmd name data
+        clear
+        title
+        [[ $name ]] &&
+            name=${name,,}
+        unset append go
+        case "${cmd,,}" in
+            a|+|add)
+                if [[ -z $name ]]; then
+                    syntax $cmd key value
+                else
+                    [[ -z $data ]] &&
+                        read -p"$name> " data
+                    save_undo
+                    if [[ ${key["$name"]} ]]; then
+                        key["$name"]+=" $data"
+                    else
+                        key["$name"]=$data
+                    fi
+                fi
+                ;;
+            l|';'|addln)
+                append=1
+                ;&
+            s|=|set)
+                if [[ -z $name ]]; then
+                    syntax $cmd key '[value]'
+                else
+                    if [[ -z $data ]]; then
+                        [[ -z $append ]] &&
+                            echo "${key["$name"]}" > "$tmp" ||
+                            echo > "$tmp"
+                        $EDITOR "$tmp"
+                        data=$(sed '/./,$!d' "$tmp" |
+                        sed -e :a -e '/^\n*$/{$d;N;ba' -e '}') ||
+                            continue
+                        rm -f "$tmp"
+                        [[ -z $data ]] &&
+                            continue
+                    fi
+                    save_undo
+                    if [[ -z $append ]]; then
+                        key["$name"]=$data
+                    elif [[ ${key["$name"]} ]]; then
+                        key["$name"]+=$'\n'"$data"
+                    else
+                        key["$name"]=$data
+                    fi
+                fi
+                ;;
+            u|-|unset)
+                if [[ -z $name ]]; then
+                    syntax $cmd key '(paste,p|both,b)'
+                else
+                    [[ $data == @(paste|p) ]] &&
+                        unset buffer["$name"]
+                    if [[ -z $data || $data == @(both|b) ]]; then
+                        save_undo
+                        unset key["$name"]
+                    fi
+                fi
+                ;;
+            x|clear)
+                if [[ -z $name ]]; then
+                    syntax $cmd '(key,k|p,paste|both,b)'
+                else
+                    case "$name" in
+                        b|both)
+                            buffer=()
+                            ;&
+                        k|keys)
+                            save_undo
+                            key=()
+                            ;;
+                        p|paste)
+                            buffer=()
+                            ;;
+                    esac
+                fi
+                ;;
+            c|copy)
+                if [[ -z $name ]]; then
+                    syntax $cmd key '[as]'
+                else
+                    [[ -z $data ]] &&
+                        data=$name
+                    [[ ${key["$name"]} ]] &&
+                        buffer["$data"]=${key["$name"]}
+                fi
+                ;;
+            p|paste)
+                if [[ -z $name ]]; then
+                    syntax $cmd key '[to]'
+                else
+                    [[ -z $data ]] &&
+                        data=$name
+                    if [[ ${buffer["$name"]} ]]; then
+                        save_undo
+                        key["$data"]=${buffer["$name"]}
+                    fi
+                fi
+                ;;
+            z|undo)
+                if [[ $undo ]]; then
+                    redo=("$($"format_kvp$fmt")" "${redo[@]}")
+                    printf '%s\n' "$undo" > "$tmp"
+                    undo=("${undo[@]:1}")
+                    parse "$tmp"
+                    rm -f "$tmp" 2> /dev/null
+                    modified=1
+                    echo 'Reverted last change.'
+                else
+                    echo 'Already at oldest change.'
+                fi
+                ;;
+            y|redo)
+                if [[ $redo ]]; then
+                    undo=("$($"format_kvp$fmt")" "${undo[@]}")
+                    printf '%s\n' "$redo" > "$tmp"
+                    redo=("${redo[@]:1}")
+                    parse "$tmp"
+                    rm -f "$tmp" 2> /dev/null
+                    modified=1
+                    echo 'Restored last change.'
+                else
+                    echo 'Already at latest change.'
+                fi
+                ;;
+            r|rename)
+                if [[ -z $name || -z $data ]]; then
+                    syntax $cmd key to
+                else
+                    save_undo
+                    modified=${key["$name"]}
+                    unset key["$name"]
+                    key["$data"]=$modified
+                fi
+                ;;
+            l|lower|lowercase)
+                if [[ -z $name ]]; then
+                    syntax $cmd key
+                else
+                    if [[ ${key["$name"]} ]]; then
+                        save_undo
+                        key["$name"]=${key["$name"],,}
+                    fi
+                fi
+                ;;
+            u|upper|uppercase)
+                if [[ -z $name ]]; then
+                    syntax $cmd key
+                else
+                    if [[ ${key["$name"]} ]]; then
+                        save_undo
+                        key["$name"]=${key["$name"]^^}
+                    fi
+                fi
+                ;;
+            '%'|sed)
+                if [[ -z $name || -z $data ]]; then
+                    syntax $cmd key script
+                else
+                    data=$(printf '%s\n' "${key["$name"]}" | sed -r "$data")
+                    retcode=$?
+                    if ((retcode == 0)); then
+                        save_undo
+                        key["$name"]=$data
+                    fi
+                fi
+                ;;
+            f|fmt|format)
+                save_undo
+                fmt=$((!--fmt + 1))
+                ;;
+            w|write|save)
+                [[ -z $name || $name == '.' ]] &&
+                    name=$1
+                if [[ -z $data ]]; then
+                    data=$fmt
+                elif [[ $data != 1 ]]; then
+                    data=2
+                fi
+                $"format_kvp$data" > "$name"
+                fmt=$data
+                echo "Wrote KVP$data: $name"
+                unset modified
+                ;;
+            e|revert)
+                save_undo
+                parse "$1" ||
+                    return 1
+                echo 'Reverted all changes.'
+                unset modified
+                ;;
+            n|'>'|next|v|'<'|prev)
+                if [[ $cmd == @(n|>|next) ]]; then
+                    go=1
+                else
+                    go=-1
+                fi
+                next=$((index + go))
+                if ((next < 0)); then
+                    echo 'Already editing first file.'
+                    continue
+                elif ((next == ${#files[@]})); then
+                    echo 'Already editing last file.'
+                    continue
+                else
+                    index=$next
+                fi
+                ;&
+            q|quit|exit)
+                if [[ $modified ]]; then
+                    echo
+                    $"format_kvp$fmt"
+                    echo
+                    read -p'Save changes (Y/n)? ' save
+                    if [[ -z $save || ${save,,} == 'y' ]]; then
+                        $"format_kvp$fmt" > "$1"
+                        echo "Wrote KVP$fmt: $1"
+                    fi
+                fi
+                break
+                ;;
+            h|help|cmds|commands)
+                cmd_usage | less
+                ;;
+            '')
+                ;;
+            *)
+                echo 'Unknown command.'
+                ;;
+        esac
+    done
+    [[ -z $go ]] &&
+        unset index
+    return 0
+}
+
+
+############
+### Main ###
+############
+
+if [[ -z $1 || $1 == @('-h'|'--help') ]]; then
+    echo "wvm-kvp - Key-Value Pair Editor"
+    echo "Version $version by Scott Garrett"
+    echo "Wintervenom [(at)] gmail.com"
+    echo
+    echo "Usage: ${0##*/} <file ...>"
+    exit 2
+fi
+
+files=("$@")
+index=0
+
+clear
+title
+while [[ $index ]]; do
+    key_editor "${files[index]}"
+done
+echo 'Exiting.'
+
+#"$HOME/Pictures/Artwork/Scott Garrett/Scott Garrett - Arch Linux.txt"

@@ -35,6 +35,11 @@
 #     configuration file. ***
 #   - Don't give a fatal error if a file didn't get recognized in the file
 #     protocol.
+#
+# TODOs:
+# + Plug-ins
+#   - 'printf' shortcuts for URLs
+#   - (keenerd) Handle multiple launchers.
 
 # Curl connection timeout.
 timeout=10
@@ -54,7 +59,7 @@ xdg_paths=(
 
 # Let's not recurse our way to hell if the BROWSER env is set to this binary.
 # (Modifying it here will not affect the variable outside of this script.)
-[[ $BROWSER == @(*/|)"${0##*/}" ]] &&
+[[ $BROWSER == ?(*/)"${0##*/}" ]] &&
     unset BROWSER
 
 # Set BROWSER (if it isn't already set) depending on whether X is running.
@@ -339,10 +344,7 @@ default_config () {
 #ext_class['example2']='example_class'
 #ext_class['default']='application/octet-stream'
 EOF
-    info "Configuration file created ($config).
-You may want to edit this, first.
-See -h for more info."
-    exit 2
+    info "Configuration file created ($config)."
 }
 
 # Display all defined handlers.
@@ -449,7 +451,6 @@ Configuration:
         # Assign 'peel' extensions to a custom class.
         ext_class['peel']='banana'
 EOF
-    exit 2
 }
 
 
@@ -508,7 +509,7 @@ declare -A ext_class=(
     ['mdz']='application/zip'
     ['med']='audio/x-mod'
     ['mod']='audio/x-mod'
-    ['mov qt']='video/quicktime'
+    ['mov']='video/quicktime'
     ['mp3']='audio/mpeg'
     ['mp4']='video/mp4'
     ['mpeg']='video/mpeg'
@@ -601,6 +602,7 @@ while getopts hvqkct:p: opt; do
             ;;
         c)
             default_config
+            exit 2
             ;;
         *)
             usage

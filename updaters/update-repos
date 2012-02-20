@@ -185,6 +185,7 @@ tree = {
                 'bin/tohex',
                 'bin/urldecode',
                 'bin/urlencode',
+                'bin/wvm-kvp',
             ),
         },
         'toys': {
