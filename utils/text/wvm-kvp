@@ -5,9 +5,7 @@
 #######################################
 # Optional Dependencies:
 # - wvm-open
-
 shopt -s extglob
-shopt -s nullglob
 
 version=20120920-2
 tmp="/tmp/desc-editor.txt"
@@ -518,7 +516,9 @@ key_editor () {
                 else
                     oifs=$IFS
                     IFS=$'\n'
+                    shopt -s nullglob
                     data=("${file%.*}".!("${file##*.}"))
+                    shopt -u nullglob
                     IFS=$oifs
                     count=${#data[@]}
                     if [[ $count == 0 ]]; then
@@ -632,5 +632,3 @@ while [[ $index ]]; do
         break
 done
 echo 'Exiting.'
-
-#"$HOME/Pictures/Artwork/Scott Garrett/Scott Garrett - Arch Linux.txt"
