@@ -19,6 +19,9 @@ tree = {
             'mpd': (
                 ('.config/mpd/mpd.conf', '(password +).*'),
             ),
+            'alsa': (
+                '.asoundrc',
+            ),
         },
         'client': {
             'newsbeuter': (
