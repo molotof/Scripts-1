@@ -85,6 +85,12 @@ for %%h in %domains% do (
 )
 
 :the_end
+rem Clear the DNS resolver cache to make sure changes take effect now.
+echo.
+echo Clearing DNS cache...
+ipconfig /flushdns
+
+rem We're done here.
 echo.
 echo HOSTS file entries have been %action% for %ip%.
 echo Run this script again to toggle.

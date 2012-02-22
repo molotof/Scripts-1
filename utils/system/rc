@@ -4,8 +4,7 @@
 # Wintervenom [(at)] gmail.com #
 ################################
 if [[ $UID != 0 ]]; then
-    echo 'Must be root to use this utility.'
-    exit 1
+    exec sudo "$0" "$@"
 elif [[ -z $2 ]]; then
     echo "Usage:  ${0##*/} (stop|start|restart) [daemon]"
     exit 1
