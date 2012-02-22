@@ -1,17 +1,17 @@
 #!/bin/bash
 ### wvm-kvp: Key-Value Pair Editor ####
-# Version 20120220-2 by Scott Garrett #
+# Version 20120220-3 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Optional Dependencies:
 # - wvm-open
 shopt -s extglob
 
-version=20120920-2
+version=20120920-3
 tmp="/tmp/desc-editor.txt"
+config="$HOME/.config/wvm-kvp"
 
-declare -A key buffer
-declare -a undo
+declare -A key buffer aliases
 type -p nano > /dev/null &&
     EDITOR=${EDITOR:-nano} ||
     EDITOR=${EDITOR:-vi}
@@ -130,19 +130,6 @@ format_kvp2 () {
             printf '%s\n' "$name: >" "${key["$name"]}" '<'
         fi
     done < <(printf '%s\n' "${!key[@]}" | sort)
-}
-
-format_buffer () {
-    local name
-    while IFS=$'\n' read name; do
-        [[ -z $name ]] &&
-            continue
-        if [[ ${buffer["$name"]} != *$'\n'* ]]; then
-            echo "$name: ${buffer["$name"]}"
-        else
-            printf '%s\n' "$name: >" "${buffer["$name"]}" '<'
-        fi
-    done < <(printf '%s\n' "${!buffer[@]}" | sort)
 }
 
 
@@ -291,35 +278,109 @@ save_undo () {
     modified=1
 }
 
+load_aliases () {
+    local name data trash
+    if [[ -z "$config/aliases/$1" ]]; then
+        echo "'$1' alias file not found."
+        return 1
+    fi
+    aliases=()
+    while IFS=$'\t' read name data trash; do
+        [[ -z $name ]] &&
+            continue
+        name=${name,,}
+        aliases["$name"]=$data
+    done < <(parse_kvp2 "$config/aliases/$1" 2> /dev/null)
+    echo "Loaded aliases from '$1'."
+}
+
+format_aliases () {
+    local name
+    for name in "${!aliases[@]}"; do
+        echo "$name: ${aliases["$name"]}"
+    done
+}
+
+format_buffer () {
+    local name IFS=$'\n'
+    while read name; do
+        [[ -z $name ]] &&
+            continue
+        if [[ ${buffer["$name"]} != *$'\n'* ]]; then
+            echo "$name: ${buffer["$name"]}"
+        else
+            printf '%s\n' "$name: >" "${buffer["$name"]}" '<'
+        fi
+    done < <(printf '%s\n' "${!buffer[@]}" | sort)
+}
+
+validate () {
+    [[ $1 =~ '^[[:alnum:]._-]+' ]] &&
+        return 0
+    echo 'Key not found or invalid key name.'
+    return 1
+}
+
+key () {
+    local name found
+    for name in "${!key[@]}"; do
+        if [[ $name == $1 ]]; then
+            if [[ -z $2 ]]; then
+                found=$name
+                break
+            else
+                ((found++))
+                if [[ $3 && ${key["$name"]} ]]; then
+                    key["$name"]+="$3$2"
+                else
+                    key["$name"]=$2
+                fi
+            fi
+        fi
+    done
+    if [[ $found ]]; then
+        echo "$found"
+    elif [[ $2 ]]; then
+        validate "$1" ||
+            return 1
+        key["$1"]=$2
+    else
+        return 1
+    fi
+}
+
+paginate () {
+    # TODO
+    true
+}
+
 key_editor () {
-    local file=$1 cmd name data modified append
-    undo=()
-    redo=()
+    local file=$1 cmd name data modified append undo=() redo=()
     if [[ ${file##*.} != @(txt|text|desc|meta|kvp|rc|conf|cfg) ]]; then
         echo "Related: $file"
         file="${file%.*}.txt"
     fi
     echo "Parsing: $file"
     if ! parse "$file"; then
-        echo 'Creating blank KVP2.'
+        echo 'Using blank KVP2.'
         fmt=2
     fi
     while :; do
-        echo
-        echo "[KVP$fmt: ${file##*/}]"
+        printf '\n[KVP%s: %s]\n' "$fmt" "${file##*/}"
         $"format_kvp$fmt"
-        echo
-        echo
-        echo '[Paste Buffer]'
+        printf '\n\n[Paste Buffer]\n'
         format_buffer
-        echo
+        printf '\n\n'
         read -e -p'> ' cmd name data
         clear
         title
         [[ $name ]] &&
             name=${name,,}
         unset append go
-        case "${cmd,,}" in
+        cmd=${cmd,,}
+        [[ $cmd && ${aliases["$cmd"]} ]] &&
+            read cmd name data <<< "${aliases["$cmd"]}"
+        case "$cmd" in
             a|+|add)
                 if [[ -z $name ]]; then
                     syntax $cmd key value
@@ -506,6 +567,36 @@ key_editor () {
                     fi
                 fi
                 ;;
+            '~'|alias)
+                if [[ -z $name ]]; then
+                    syntax $cmd name command
+                else
+                    data=${data:-default}
+                    case "$name" in
+                        s|w|save|write)
+                            format_aliases > "$config/aliases/$data"
+                            echo "'$data' aliases file updated."
+                            ;;
+                        l|load)
+                            load_aliases "$data"
+                            ;;
+                        list)
+                            for name in "${!aliases[@]}"; do
+                                printf '%s: %s\n' "$name" "${aliases["$name"]}"
+                            done
+                            ;;
+                        *)
+                            if [[ $data ]]; then
+                                aliases["$name"]=$data
+                                echo "Alias '$name' created."
+                            else
+                                unset aliases["$name"]
+                                echo "Alias '$name' deleted."
+                            fi
+                            ;;
+                    esac
+                fi
+                ;;
             f|fmt|format)
                 save_undo
                 fmt=$((!--fmt + 1))
@@ -625,6 +716,7 @@ fi
 files=("$@")
 index=0
 
+mkdir -p "$config/aliases"
 clear
 title
 while [[ $index ]]; do

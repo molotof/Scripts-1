@@ -1,0 +1,98 @@
+#!/bin/bash
+### Toggle HOSTS File Entries #########
+# Version 20120221-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+version='20120221-1'
+
+###############
+### Globals ###
+###############
+
+# Which IP should this script toggle the entries of?
+# If not in argument parameters, use Dreamviews' by default.
+ip="${1:-208.43.40.120}"
+
+# Which domains should point at the IP above?
+# If not in argument parameters, use Dreamviews' by default.
+if [[ -z "$2" ]]; then
+    tld='dreamviews.com'
+    domains=("$tld" "www.$tld" "irc.$tld" "webchat.$tld")
+else
+    domains=("${@:2}")
+fi
+
+
+
+#################
+### Functions ###
+#################
+
+fatal () {
+    echo "FATAL: $1"
+    exit 1
+}
+
+
+
+############
+### Main ###
+############
+
+# Must be root to edit hosts file.
+[[ $UID != 0 ]] &&
+    fatal 'You need to run the script as root to use it.'
+
+# Figure out where the user's host file is.
+for hosts in /{private,}/etc/hosts ''; do
+    [[ -f "$hosts" ]] &&
+        break
+done
+[[ -z "$hosts" ]] &&
+    fatal 'Cannot find a hosts file on your system.'
+
+# Figure out where the user's temp directory is.
+for tmp in /{data,}/tmp ''; do
+    [[ -d "$tmp" ]] &&
+        break
+done
+tmp="${tmp:-$HOME}/hosts.new"
+
+# Back-up hosts file.
+echo "Backing up hosts file as '${hosts##*/}.old'..."
+cp "$hosts"{,.old}
+
+# Look for existing entries.  If they are found, assume the user is running
+# this script again to remove them.
+ip_regex="^${ip//./\\.}\b"
+grep -q "$ip_regex" "$hosts"
+add_entries=$?
+
+# Remove existing entries pointing to the address in <ip>.
+# We can't redirect to the same file that is being read, so we'll write to a
+# different file...
+echo "Getting rid of existing entries pointing to $ip..."
+grep -v "$ip_regex" "$hosts" > "$tmp"
+# ...and replace the old one.
+mv "$tmp" "$hosts"
+
+# If entries were not previously found, then add them to the hosts file.
+action='removed'
+if [[ $add_entries != 0 ]]; then
+    echo
+    for domain in "${domains[@]}"; do
+        echo "$ip $domain" >> "$hosts"
+        echo "Added entry:  $ip $domain"
+    done
+    action='added'
+fi
+
+# Fix hosts file permissions, just in case (e.g, rooted Android users).
+echo "Fixing host file permissions..."
+chown 0:0 "$hosts"
+chmod 644 "$hosts"
+
+echo
+# We're done here.
+echo "Hosts file entries have been $action for $ip."
+echo "Run this script again to toggle."

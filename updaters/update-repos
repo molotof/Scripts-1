@@ -124,6 +124,9 @@ tree = {
                 'bin/vkdl',
                 'bin/ytdl',
             ),
+            'ip': (
+                'bin/toggle-host*',
+            ),
         },
         'file': {
             'backup': (
