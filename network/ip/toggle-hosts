@@ -38,6 +38,10 @@ fatal () {
 ############
 ### Main ###
 ############
+echo "Toggle HOSTS File Entries"
+echo "Version $version by Scott Garrett"
+echo "Wintervenom [(at)] archlinux.us"
+echo
 
 # Must be root to edit hosts file.
 [[ $UID != 0 ]] &&
