@@ -41,6 +41,11 @@ tree = {
                 '.config/ranger/options.py',
             ),
         },
+        'network': {
+            'samba': (
+                '/etc/samba/smb.conf',
+            ),
+        },
         'shell': {
             'bash': (
                 '.bashrc',
