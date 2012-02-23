@@ -314,15 +314,23 @@ format_buffer () {
     done < <(printf '%s\n' "${!buffer[@]}" | sort)
 }
 
+deblank () {
+    sed '/./,$!d' "$1" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+}
+
 validate () {
-    [[ $1 =~ '^[[:alnum:]._-]+' ]] &&
+    [[ $1 =~ ^[[:alnum:]._-]+$ ]] &&
         return 0
     echo 'Key not found or invalid key name.'
     return 1
 }
 
 key () {
-    local name found
+    local quiet name found
+    if [[ $1 == '-q' ]]; then
+        quiet=1
+        shift
+    fi
     for name in "${!key[@]}"; do
         if [[ $name == $1 ]]; then
             if [[ -z $2 ]]; then
@@ -339,7 +347,9 @@ key () {
         fi
     done
     if [[ $found ]]; then
-        echo "$found"
+        [[ -z $quiet ]] &&
+            echo "$found"
+        return 0
     elif [[ $2 ]]; then
         validate "$1" ||
             return 1
@@ -374,10 +384,9 @@ key_editor () {
         read -e -p'> ' cmd name data
         clear
         title
-        [[ $name ]] &&
-            name=${name,,}
         unset append go
         cmd=${cmd,,}
+        name=${name,,}
         [[ $cmd && ${aliases["$cmd"]} ]] &&
             read cmd name data <<< "${aliases["$cmd"]}"
         case "$cmd" in
@@ -394,12 +403,8 @@ key_editor () {
                         data=${data%.*}
                     fi
                     save_undo
-                    if [[ ${key["$name"]} ]]; then
-                        key["$name"]+=" $data"
-                    else
-                        key["$name"]=$data
-                    fi
-                    echo "Updated value of key '$name'."
+                    key -q "$name" "$data" ' ' &&
+                        echo "Updated value of key '$name'."
                 fi
                 ;;
             l|';'|addln)
@@ -411,11 +416,10 @@ key_editor () {
                 else
                     if [[ -z $data ]]; then
                         [[ -z $append ]] &&
-                            echo "${key["$name"]}" > "$tmp" ||
+                            key "$name" > "$tmp" ||
                             echo > "$tmp"
                         $EDITOR "$tmp"
-                        data=$(sed '/./,$!d' "$tmp" |
-                        sed -e :a -e '/^\n*$/{$d;N;ba' -e '}') ||
+                        data=$(deblank "$tmp") ||
                             continue
                         rm -f "$tmp"
                     fi
@@ -427,7 +431,7 @@ key_editor () {
                     fi
                     save_undo
                     if [[ -z $append ]]; then
-                        key["$name"]=$data
+                        key["$name"]=$data # Here.
                     elif [[ ${key["$name"]} ]]; then
                         key["$name"]+=$'\n'"$data"
                     else

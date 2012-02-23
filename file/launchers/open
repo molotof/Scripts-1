@@ -216,6 +216,7 @@ remote_type () {
     $curl -I "$1" | awk -F'(:|;) ' '
         /^Content-Type/ {
             gsub(/\s/, "", $2)
+            sub(/;.*$/, "", $2)
             print $2
         }
     '
