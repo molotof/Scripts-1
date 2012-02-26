@@ -1,16 +1,42 @@
 #!/bin/bash
-library="${HOME}/Documents/Software"
-docs=(
-    'Shell/Bash/Advanced Bash Scripting Guide.pdf|http://www.tldp.org/LDP/abs/abs-guide.pdf'
-    'Haskell/[Various Authors] - Haskell.pdf|http://upload.wikimedia.org/wikipedia/commons/2/26/Haskell.pdf'
-    'Window Managers/i3 User Guide.htm|http://i3.zekjur.net/docs/userguide.html'
-    'Haskell/Miran Lipovaˇa - Learn You A Haskell for Great Good!.pdf|http://learnyouahaskell.com/learnyouahaskell.pdf'
-    'Haskell/[Various Authors] - Learn Haskell in 10 Minutes.htm|http://www.haskell.org/haskellwiki/index.php?title=Learn_Haskell_in_10_minutes&printable=yes'
-    'Shell/Bruce Barnett - Sed, An Introduction and Tutorial.htm|http://www.grymoire.com/Unix/Sed.html'
+### Update Software Documentations ####
+# Version 20120223-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+
+library="$HOME/Documents/Software"
+
+declare -A docs=(
+    ['Shell/Bash/Advanced Bash Scripting Guide.pdf']='http://www.tldp.org/LDP/abs/abs-guide.pdf'
+    ['Haskell/Various Authors - Haskell.pdf']='http://upload.wikimedia.org/wikipedia/commons/2/26/Haskell.pdf'
+    ['Window Managers/i3 User Guide.htm']='http://i3.zekjur.net/docs/userguide.html'
+    ['Haskell/Miran Lipovca - Learn You A Haskell for Great Good.pdf']='http://learnyouahaskell.com/learnyouahaskell.pdf'
+    ['Shell/Bruce Barnett - Sed, An Introduction and Tutorial.htm']='http://www.grymoire.com/Unix/Sed.html'
+    ['PHP/PHP Manual/php.tar.gz']='http://us2.php.net/distributions/manual/php_manual_en.tar.gz'
 )
 
-for doc in "${docs[@]}"; do
-    IFS='|' doc=(${doc})
-    echo "${doc[1]}"
-    wget "${doc[1]}" -O "${library}/${doc[0]}"
+for path in "${!docs[@]}"; do
+    url=${docs["$path"]}
+    path="$library/$path"
+    echo "$path"
+    if [[ -e  "$path" ]]; then
+        echo '  Removing old copy...'
+        rm -rf "$path"
+    fi
+    mkdir -p "${path%/*}"
+    echo -n '  Downloading new copy... '
+    if wget "$url" -q -O "$path"; then
+        echo 'done.'
+    else
+        echo 'failed.'
+    fi
+    if [[ ${path##*.} == @(gz|tar|bz2|zip|rar) ]]; then
+        echo -n '  Extracting archive... '
+        if bsdtar xf "$path"; then
+            rm "$path"
+            echo 'done.'
+        else
+            echo 'failed.'
+        fi
+    fi
 done

@@ -11,7 +11,7 @@ version=20120920-3
 tmp="/tmp/desc-editor.txt"
 config="$HOME/.config/wvm-kvp"
 
-declare -A key buffer aliases
+declare -A buffer paste aliases
 type -p nano > /dev/null &&
     EDITOR=${EDITOR:-nano} ||
     EDITOR=${EDITOR:-vi}
@@ -39,10 +39,10 @@ parse () {
         [[ -z $name ]] &&
             continue
         name=${name,,}
-        if [[ ${key["$name"]} ]]; then
-            key["$name"]+=$'\n'"$data"
+        if [[ ${buffer["$name"]} ]]; then
+            buffer["$name"]+=$'\n'"$data"
         else
-            key["$name"]=$data
+            buffer["$name"]=$data
         fi
     done < <($"parse_kvp$fmt" "$1" 2> /dev/null)
 }
@@ -114,8 +114,8 @@ format_kvp1 () {
         [[ -z $name ]] &&
             continue
         echo "$name"
-        printf '    %s\n' ${key["$name"]}
-    done < <(printf '%s\n' "${!key[@]}" | sort)
+        printf '    %s\n' ${buffer["$name"]}
+    done < <(printf '%s\n' "${!buffer[@]}" | sort)
     set +f
 }
 
@@ -124,12 +124,12 @@ format_kvp2 () {
     while read name; do
         [[ -z $name ]] &&
             continue
-        if [[ ${key["$name"]} != *$'\n'* ]]; then
-            echo "$name: ${key["$name"]}"
+        if [[ ${buffer["$name"]} != *$'\n'* ]]; then
+            echo "$name: ${buffer["$name"]}"
         else
-            printf '%s\n' "$name: >" "${key["$name"]}" '<'
+            printf '%s\n' "$name: >" "${buffer["$name"]}" '<'
         fi
-    done < <(printf '%s\n' "${!key[@]}" | sort)
+    done < <(printf '%s\n' "${!buffer[@]}" | sort)
 }
 
 
@@ -144,132 +144,16 @@ title () {
 }
 
 syntax () {
-    IFS=' ' echo "Syntax: $1 $(printf "<%s> " "${@:2}")"
+    IFS=' ' echo "Syntax: ${1#cmd_*} $(printf "<%s> " "${@:2}")"
 }
 
-cmd_usage () {
-    cat <<'EOF'
-    wvm-kvp - Key-Value Pair Editor Command Usage
+successful () {
+    [[ $? == 0 ]]
+}
 
-help
-    Aliases: h, cmds, commands
-    You are currently here.
-    Press [q] to return to the editor.
-
-add <key> <value>
-    Aliases: a, +
-    Appends value of a key, prefixed with a space
-    (if it isn't empty).  Will prompt for a value
-    if <value> is left blank.  If the <value> is
-    '.', the base name of the current file will be
-    used.
-
-addln <key> [value]
-    Aliases: l, ;
-    Appends value of a key as a new line (if it
-    isn't empty).  If <value> is left blank, the
-    executable defined in $EDITOR will be used to
-    edit a value for the key, and the saved file
-    will be appended (with any blank lines at its
-    beginning or end removed) if it is not empty.
-    If <value> is '.', the base name of the cur-
-    rent file will be used.
-
-set <key> [value]
-    Aliases: s, =
-    Sets the value of a key, replacing its value.
-    Same behavior as `addln` if <value> is left
-    blank, except contents of saved file replace
-    the current value if it is not empty.  If the
-    <value> is '.', the base name of the current
-    file will be used.
-
-unset <key> (paste,p|both,b)
-    Aliases: u, -, rm
-    Deletes a key (and its value).  If 'paste' or
-    'p' is added, deletes the key from the paste
-    buffer.  If 'both' or 'b' is added, deletes
-    the key from both buffers.
-
-copy [key] [as]
-    Aliases: c
-    Copies a key to the paste buffer, optionally
-    with a different key name (<as>).  If <key>
-    is empty, will copy all keys (<as> will be
-    ignored in this case).
-
-paste [key] [to]
-    Aliases: [p]
-    Pastes a key from the paste buffer, optionally
-    to a different key name than what was copied
-    (<to>).  If <key> is empty, will paste all keys
-    (<to> will be ignored in this case).
-
-undo
-    Aliases: z
-    Restores KVPs to state before the last edit
-    operation.  Up to 50 changes are saved.
-
-redo
-    Aliases: y
-    Restores KVPs to state before the last undo
-
-rename <key> <to>
-    Aliases: r
-    Renames a key to something else (<to>).
-
-lowercase <key>
-    Aliases: l, lower
-    Lowercases the value of a key.
-
-uppercase <key>
-    Aliases: u, lower
-    Capitalizes the value of a key.
-
-sed <key> <script>
-    Aliases: %
-    Sets the value of a key to the result of a
-    Sed operation using <script>.  Sed will be
-    executed with extended regular expressions
-    enabled.
-
-format
-    Aliases: f, fmt
-    Toggles the KVP format between KVP1 and KVP2.
-
-open
-    Aliases: o
-    Opens related file that is detected by the
-    editor with the executable in $LAUNCHER.
-    If more than one related file is detected,
-    will prompt you to choose which to open.
-
-write [filepath|.] (v1,1|v2,2)
-    Aliases: w, save
-    Writes KVP output to file, optionally to a
-    different <filepath> than what was opened.
-    '.' used as a file path will write to the
-    original file (default behavior).  Output
-    is written in whichever KVP version it was
-    opened in unless a KVP version is specified
-    after the file path ('v1'/'1' or 'v2'/'2').
-
-revert
-    Aliases: e
-    Revert to the last-saved state.
-
-next
-    Aliases: n, >
-    Move to the next file to edit (by index).
-
-prev
-    Aliases: v, <
-    Move to the last-edited file (by index).
-
-quit
-    Aliases: q, exit
-    Exits the editor.
-EOF
+stderr () {
+    echo "$1" >&2
+    continue
 }
 
 save_undo () {
@@ -301,17 +185,17 @@ format_aliases () {
     done
 }
 
-format_buffer () {
+format_paste () {
     local name IFS=$'\n'
     while read name; do
         [[ -z $name ]] &&
             continue
-        if [[ ${buffer["$name"]} != *$'\n'* ]]; then
-            echo "$name: ${buffer["$name"]}"
+        if [[ ${paste["$name"]} != *$'\n'* ]]; then
+            echo "$name: ${paste["$name"]}"
         else
-            printf '%s\n' "$name: >" "${buffer["$name"]}" '<'
+            printf '%s\n' "$name: >" "${paste["$name"]}" '<'
         fi
-    done < <(printf '%s\n' "${!buffer[@]}" | sort)
+    done < <(printf '%s\n' "${!paste[@]}" | sort)
 }
 
 deblank () {
@@ -326,42 +210,674 @@ validate () {
 }
 
 key () {
-    local quiet name found
-    if [[ $1 == '-q' ]]; then
-        quiet=1
-        shift
-    fi
-    for name in "${!key[@]}"; do
-        if [[ $name == $1 ]]; then
+    local name
+    unset found value
+    [[ $2 ]] &&
+        save_undo
+    for name in "${!buffer[@]}"; do
+        if [[ $name =~ ^$1$ ]]; then
             if [[ -z $2 ]]; then
                 found=$name
                 break
             else
                 ((found++))
-                if [[ $3 && ${key["$name"]} ]]; then
-                    key["$name"]+="$3$2"
+                if [[ $2 != ':u' ]]; then
+                    if [[ $3 && ${buffer["$name"]} ]]; then
+                        buffer["$name"]+="$3$2"
+                    else
+                        buffer["$name"]=$2
+                    fi
                 else
-                    key["$name"]=$2
+                    unset buffer["$name"]
                 fi
             fi
         fi
     done
     if [[ $found ]]; then
-        [[ -z $quiet ]] &&
-            echo "$found"
+        [[ -z $2 ]] &&
+            value=${buffer["$name"]}
         return 0
     elif [[ $2 ]]; then
         validate "$1" ||
-            return 1
-        key["$1"]=$2
+            continue
+        found='new'
+        if [[ $2 != ':u' ]]; then
+            buffer["$1"]=$2
+        else
+            unset buffer["$1"]
+        fi
     else
-        return 1
+        echo "No key matching '$1'."
+        continue
+    fi
+}
+
+paste_key () {
+    local name
+    unset found value
+    for name in "${!paste[@]}"; do
+        if [[ $name =~ ^$1$ ]]; then
+            if [[ -z $2 ]]; then
+                found=$name
+                break
+            else
+                ((found++))
+                if [[ $2 != ':u' ]]; then
+                    if [[ $3 && ${paste["$name"]} ]]; then
+                        paste["$name"]+="$3$2"
+                    else
+                        paste["$name"]=$2
+                    fi
+                else
+                    unset paste["$name"]
+                fi
+            fi
+        fi
+    done
+    if [[ $found ]]; then
+        [[ -z $2 ]] &&
+            value=${paste["$name"]}
+        return 0
+    elif [[ $2 ]]; then
+        validate "$1" ||
+            continue
+        found='new'
+        if [[ $2 != ':u' ]]; then
+            paste["$1"]=$2
+        else
+            unset paste["$1"]
+        fi
+    else
+        echo "No key matching '$1'."
+        continue
     fi
 }
 
 paginate () {
     # TODO
     true
+}
+
+
+### Editor Commands ###
+cmd_set () {
+    case "$1" in
+        '-i')
+            params=('key' '?text')
+            names=('=' 's')
+            ;;
+        '-h')
+            cat <<'EOF'
+Sets the value of keys matching <key> to <text>. If <text> is left blank, then
+$EDITOR will be launched for you to edit the key's value. If <text> is set to
+a period, the name of the file being edited (without the extension) will be
+substituted.
+EOF
+            ;;
+        *)
+            if [[ $2 ]]; then
+                text=$2
+            else
+                if [[ $3 ]]; then
+                    echo > "$tmp"
+                else
+                    key "$1" > "$tmp"
+                fi
+                $EDITOR "$tmp"
+                text=$(deblank "$tmp")
+                if ! successful; then
+                    stderr 'Empty value. No changes made.'
+                    return 1
+                fi
+                rm -f "$tmp"
+            fi
+            if [[ -z $text ]]; then
+                stdout 'Empty value.  No changes made.'
+                return 1
+            elif [[ $text == '.' ]]; then
+                text=${file##*/}
+                text=${text%.*}
+            fi
+            key "$1" "$text" "$3"
+            echo "Updated value of $found key(s) matching '$name'."
+            ;;
+    esac
+}
+
+cmd_add () {
+    case "$1" in
+        '-i')
+            params=('key' '?text')
+            names=('+' 'a')
+            ;;
+        '-h')
+            cat <<'EOF'
+Same as the `set` command, but appends <text> to the value of <key>, prefixed
+with a space, if the key is not empty.
+EOF
+            ;;
+        *)
+            set "$1" "$2" ' '
+            ;;
+    esac
+}
+
+cmd_addln () {
+    case "$1" in
+        '-i')
+            params=('key' '?value')
+            names=(';' 'l')
+            ;;
+        '-h')
+            cat <<'EOF'
+Same as the `set` command, but appends <text> to the value of <key>, prefixed
+with a newline, if the key is not empty.
+EOF
+            ;;
+        *)
+            cmd_set "$1" "$2" $'\n'
+            ;;
+    esac
+}
+
+cmd_unset () {
+    case "$1" in
+        '-i')
+            params=('key' '?buffer')
+            names=('-' 'rm')
+            ;;
+        '-h')
+            cat <<'EOF'
+Deletes keys matching <key>. If <buffer> is set to 'paste'/'p', the matching
+keys will be deleted from the paste buffer instead of the main one. If it is
+set to 'all'/'a', will delete matching keys from both buffers.
+EOF
+            ;;
+        *)
+            if [[ $2 == @(p|paste) ]]; then
+                paste_key "$1" :u
+                echo "Deleted $found paste key(s) matching '$1'."
+            fi
+            if [[ -z $2 || $2 == @(a|all) ]]; then
+                key "$1" :u
+                echo "Deleted $found key(s) matching '$1'."
+            fi
+            ;;
+    esac
+}
+
+cmd_clear () {
+    case "$1" in
+        '-i')
+            params=('[a]ll|[b]uffer|[p]aste')
+            names=('x')
+            ;;
+        '-h')
+            cat <<'EOF'
+Clears all keys from either the main buffer, pastes, or both.
+EOF
+            ;;
+        *)
+            case "$1" in
+                a|all)
+                    paste=()
+                    echo 'Cleared pastes'
+                    ;&
+                b|buffer)
+                    save_undo
+                    buffer=()
+                    echo 'Cleared buffer.'
+                    ;;
+                p|paste)
+                    paste=()
+                    echo 'Cleared pastes'
+                    ;;
+                *)
+                    echo 'Unknown buffer.'
+                    return 1
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+cmd_copy () {
+    case "$1" in
+        '-i')
+            params=('key' '?to')
+            names=('c')
+            ;;
+        '-h')
+            cat <<'EOF'
+Copies key matching <key> to the paste buffer, optionally to different key(s)
+(<to>). If <key> is empty, will copy all keys.
+EOF
+            ;;
+        *)
+            if [[ $1 ]]; then
+                target=${2:-$1}
+                key "$1"
+                name=$found
+                paste_key "$target" "$value"
+                echo "Copied key '$name' as $found paste(s) matching '$target'."
+            else
+                for name in "${!buffer[@]}"; do
+                    paste["$name"]=${buffer["$name"]}
+                done
+                echo 'Copied all keys.'
+            fi
+            ;;
+    esac
+}
+
+cmd_paste () {
+    case "$1" in
+        '-i')
+            params=('key' '?to')
+            names=('p')
+            ;;
+        '-h')
+            cat <<'EOF'
+Pastes key matching <key> from the paste buffer, optionally to different key(s)
+(<to>). If <key> is empty, will paste all keys.
+EOF
+            ;;
+        *)
+            if [[ $1 ]]; then
+                target=${2:-$1}
+                paste_key "$1"
+                name=$found
+                key "$target" "$value"
+                echo "Pasted '$name' to $found key(s) matching '$target'."
+            else
+                for name in "${!paste[@]}"; do
+                    buffer["$name"]=${paste["$name"]}
+                done
+                echo 'Pasted all keys.'
+            fi
+            ;;
+    esac
+}
+
+cmd_undo () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('z')
+            ;;
+        '-h')
+            cat <<'EOF'
+Restores main buffer to state before the last edit. Up to 50 changes are saved.
+EOF
+            ;;
+        *)
+            if [[ $undo ]]; then
+                redo=("$($"format_kvp$fmt")" "${redo[@]}")
+                printf '%s\n' "$undo" > "$tmp"
+                undo=("${undo[@]:1}")
+                parse "$tmp"
+                rm -f "$tmp" 2> /dev/null
+                modified=1
+                echo 'Reverted last change.'
+            else
+                echo 'Already at oldest change.'
+            fi
+            ;;
+    esac
+}
+
+cmd_redo () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('y')
+            ;;
+        '-h')
+            cat <<'EOF'
+Restores main buffer to state before the last undo (if it hasn't been changed
+since then).
+EOF
+            ;;
+        *)
+            if [[ $redo ]]; then
+                undo=("$($"format_kvp$fmt")" "${undo[@]}")
+                printf '%s\n' "$redo" > "$tmp"
+                redo=("${redo[@]:1}")
+                parse "$tmp"
+                rm -f "$tmp" 2> /dev/null
+                modified=1
+                echo 'Restored last change.'
+            else
+                echo 'Already at latest change.'
+            fi
+            ;;
+    esac
+}
+
+cmd_rename () {
+    case "$1" in
+        '-i')
+            params=('key' 'name')
+            names=('r' 'mv')
+            ;;
+        '-h')
+            cat <<'EOF'
+Renames key matching <key> to <name>.
+EOF
+            ;;
+        *)
+            validate "$2" ||
+                continue
+            key "$1"
+            name=$found
+            unset buffer["$name"]
+            key "$2" "$value"
+            echo "Renamed key '$name' to '$2'."
+            ;;
+    esac
+}
+
+cmd_lowercase () {
+    case "$1" in
+        '-i')
+            params=('key')
+            names=('l' 'lower')
+            ;;
+        '-h')
+            cat <<'EOF'
+Lowercases the value of key matching <key>.
+EOF
+            ;;
+        *)
+            key "$1"
+            name=$found
+            key "$name" "${value,,}"
+            echo "Lowercased value of key '$name'."
+            ;;
+    esac
+}
+
+cmd_uppercase () {
+    case "$1" in
+        '-i')
+            params=('key')
+            names=('u' 'upper')
+            ;;
+        '-h')
+            cat <<'EOF'
+Uppercases the value of key matching <key>.
+EOF
+            ;;
+        *)
+            key "$1"
+            name=$found
+            key "$name" "${value^^}"
+            echo "Uppercased value of key '$name'."
+            ;;
+    esac
+}
+
+cmd_sed () {
+    case "$1" in
+        '-i')
+            params=('key' 'script')
+            names=('%')
+            ;;
+        '-h')
+            cat <<'EOF'
+Sets the value of key matching <key> to the result of a Sed operation using
+<script>. Sed will be executed with extended regular expressions enabled.
+EOF
+            ;;
+        *)
+            key "$1"
+            name=$found
+            value=$(printf '%s\n' "$value" | sed -r "$2")
+            if [[ $? == 0 ]]; then
+                key "$name" "$value"
+                echo "Updated value of key '$name'."
+            fi
+            ;;
+    esac
+}
+
+cmd_alias () {
+    case "$1" in
+        '-i')
+            params=('name' 'command|ls|[l]oad|[s]ave')
+            names=()
+            ;;
+        '-h')
+            cat <<'EOF'
+EOF
+            ;;
+        *)
+            target=${2:-default}
+            case "$1" in
+                s|w|save|write)
+                    format_aliases > "$config/aliases/$target"
+                    echo "'$target' aliases file updated."
+                    ;;
+                l|load)
+                    load_aliases "$target"
+                    ;;
+                ls|list)
+                    for name in "${!aliases[@]}"; do
+                        printf '%s: %s\n' "$name" "${aliases["$name"]}"
+                    done
+                    ;;
+                *)
+                    if [[ $2 ]]; then
+                        aliases["$1"]=$2
+                        echo "Alias '$1' created."
+                    else
+                        unset aliases["$1"]
+                        echo "Alias '$1' deleted."
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+cmd_format () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('f' 'fmt')
+            ;;
+        '-h')
+            cat <<'EOF'
+Toggles the buffer format between KVP1 and KVP2.
+EOF
+            ;;
+        *)
+            fmt=$((!--fmt + 1))
+            ;;
+    esac
+}
+
+cmd_open () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('o' 'launch')
+            ;;
+        '-h')
+            cat <<'EOF'
+Opens the related file that is detected by the editor with the executable in
+$LAUNCHER. If more than one related file is found, will prompt you to choose
+which one to open.
+EOF
+            ;;
+        *)
+            if [[ -z $LAUNCHER ]]; then
+                echo 'No $LAUNCHER is set.'
+            else
+                oifs=$IFS
+                IFS=$'\n'
+                shopt -s nullglob
+                data=("${file%.*}".!("${file##*.}"))
+                shopt -u nullglob
+                IFS=$oifs
+                count=${#data[@]}
+                if [[ $count == 0 ]]; then
+                    echo 'No related files found.'
+                elif [[ $count == 1 ]]; then
+                    echo "Opened $data with $LAUNCHER."
+                    $LAUNCHER "$data"
+                else
+                    count=0
+                    for f in "${data[@]}"; do
+                        echo "$((count++)): $f"
+                    done
+                    read -e -p'Open which file (none to cancel)? ' f
+                    if [[ $f =~ '^[0-9]+$' && ${data["$f"]} ]]; then
+                        echo "Opened ${data[$f]} with $LAUNCHER."
+                        $LAUNCHER "${data[$f]}"
+                    else
+                        echo 'Invalid number selected.'
+                    fi
+                fi
+            fi
+            ;;
+    esac
+}
+
+cmd_write () {
+    case "$1" in
+        '-i')
+            params=('?filepath' 'version')
+            names=('w' 'save')
+            ;;
+        '-h')
+            cat <<'EOF'
+Writes main buffer to file, optionally to a different <filepath> than what was
+opened. '.' used as a filepath will write to the original file (default).
+Output is written in whichever KVP version it was opened in unless <version>
+is specified after the file path ('1' or '2').
+EOF
+            ;;
+        *)
+            [[ -z $1 || $1 == '.' ]] &&
+                name=$file
+            $"format_kvp$fmt" > "$name"
+            fmt=$data
+            echo "Wrote KVP$data: $name"
+            unset modified
+            ;;
+    esac
+}
+
+cmd_revert () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('e')
+            ;;
+        '-h')
+            cat <<'EOF'
+Revert main buffer to the last-saved state.
+EOF
+
+            ;;
+        *)
+            save_undo
+            parse "$file" ||
+                return 1
+            echo 'Reverted all changes.'
+            unset modified
+            ;;
+    esac
+}
+
+cmd_go () {
+    # Make aliases: prev, next = go -1, go +1
+    case "$1" in
+        '-i')
+            params=('index')
+            names=('g')
+            ;;
+        '-h')
+            cat <<'EOF'
+EOF
+            ;;
+        *)
+
+            if [[ ${1:0:1} == @('+'|'-') ]]; then
+                next=$((index $1))
+            else
+                next=$1
+            fi
+            if [[ $next -lt 0 || $next -gt ${#files[@]} ]]; then
+                stderr 'Invalid index.'
+                return 1
+            else
+                index=$next
+            fi
+            ;;
+    esac
+}
+
+cmd_quit () {
+    case "$1" in
+        '-i')
+            params=()
+            names=('q')
+            ;;
+        '-h')
+            cat <<'EOF'
+Exits the editor.
+EOF
+            ;;
+        *)
+            if [[ $modified ]]; then
+                echo
+                $"format_kvp$fmt"
+                echo
+                read -e -p'Save changes (Y/n)? ' save
+                clear
+                title
+                if [[ -z $save || ${save,,} == 'y' ]]; then
+                    $"format_kvp$fmt" > "$file"
+                    echo "Wrote KVP$fmt: $file"
+                fi
+            fi
+            break
+            ;;
+    esac
+}
+
+cmd_help () {
+    case "$1" in
+        '-i')
+            params=('?command')
+            names=('h' 'help' 'cmds' 'commands')
+            ;;
+        '-h')
+            cat <<'EOF'
+You are currently here.  Press [q] to return to the editor.
+EOF
+            ;;
+        *)
+            cmd_usage | less
+            ;;
+    esac
+}
+
+_cmd_template () {
+    case "$1" in
+        '-i')
+            params=()
+            names=()
+            ;;
+        '-h')
+            cat <<'EOF'
+EOF
+            ;;
+        *)
+            ;;
+    esac
 }
 
 key_editor () {
@@ -379,7 +895,7 @@ key_editor () {
         printf '\n[KVP%s: %s]\n' "$fmt" "${file##*/}"
         $"format_kvp$fmt"
         printf '\n\n[Paste Buffer]\n'
-        format_buffer
+        format_paste
         printf '\n\n'
         read -e -p'> ' cmd name data
         clear
@@ -390,306 +906,7 @@ key_editor () {
         [[ $cmd && ${aliases["$cmd"]} ]] &&
             read cmd name data <<< "${aliases["$cmd"]}"
         case "$cmd" in
-            a|+|add)
-                if [[ -z $name ]]; then
-                    syntax $cmd key value
-                else
-                    [[ -z $data ]] &&
-                        read -e -p"$name> " data
-                    if [[ -z $data ]]; then
-                        continue
-                    elif [[ $data == '.' ]]; then
-                        data=${file##*/}
-                        data=${data%.*}
-                    fi
-                    save_undo
-                    key -q "$name" "$data" ' ' &&
-                        echo "Updated value of key '$name'."
-                fi
-                ;;
-            l|';'|addln)
-                append=1
-                ;&
-            s|=|set)
-                if [[ -z $name ]]; then
-                    syntax $cmd key '[value]'
-                else
-                    if [[ -z $data ]]; then
-                        [[ -z $append ]] &&
-                            key "$name" > "$tmp" ||
-                            echo > "$tmp"
-                        $EDITOR "$tmp"
-                        data=$(deblank "$tmp") ||
-                            continue
-                        rm -f "$tmp"
-                    fi
-                    if [[ -z $data ]]; then
-                        continue
-                    elif [[ $data == '.' ]]; then
-                        data=${file##*/}
-                        data=${data%.*}
-                    fi
-                    save_undo
-                    if [[ -z $append ]]; then
-                        key["$name"]=$data # Here.
-                    elif [[ ${key["$name"]} ]]; then
-                        key["$name"]+=$'\n'"$data"
-                    else
-                        key["$name"]=$data
-                    fi
-                    echo "Updated value of key '$name'."
-                fi
-                ;;
-            u|-|rm|unset)
-                if [[ -z $name ]]; then
-                    syntax $cmd key '(paste,p|both,b)'
-                else
-                    if [[ $data == @(paste|p) ]]; then
-                        unset buffer["$name"]
-                        echo "Deleted paste buffer key '$name'."
-                    fi
-                    if [[ -z $data || $data == @(both|b) ]]; then
-                        save_undo
-                        unset key["$name"]
-                        echo "Deleted key '$name'."
-                    fi
-                fi
-                ;;
-            x|clear)
-                if [[ -z $name ]]; then
-                    syntax $cmd '(key,k|p,paste|both,b)'
-                else
-                    case "$name" in
-                        b|both)
-                            buffer=()
-                            echo 'Cleared paste buffer.'
-                            ;&
-                        k|keys)
-                            save_undo
-                            key=()
-                            echo 'Deleted all keys.'
-                            ;;
-                        p|paste)
-                            buffer=()
-                            echo 'Cleared paste buffer.'
-                            ;;
-                    esac
-                fi
-                ;;
-            c|copy)
-                if [[ $name ]]; then
-                    [[ -z $data ]] &&
-                        data=$name
-                    buffer["$data"]=${key["$name"]}
-                    echo "Copied key '$name' as '$data'."
-                else
-                    for name in "${!key[@]}"; do
-                        buffer["$name"]=${key["$name"]}
-                    done
-                    echo 'Copied all keys.'
-                fi
-                ;;
-            p|paste)
-                save_undo
-                if [[ $name ]]; then
-                    [[ -z $data ]] &&
-                        data=$name
-                    key["$data"]=${buffer["$name"]}
-                    echo "Pasted key '$name' to '$data'."
-                else
-                    for name in "${!buffer[@]}"; do
-                        key["$name"]=${buffer["$name"]}
-                    done
-                    echo 'Pasted all keys.'
-                fi
-                ;;
-            z|undo)
-                if [[ $undo ]]; then
-                    redo=("$($"format_kvp$fmt")" "${redo[@]}")
-                    printf '%s\n' "$undo" > "$tmp"
-                    undo=("${undo[@]:1}")
-                    parse "$tmp"
-                    rm -f "$tmp" 2> /dev/null
-                    modified=1
-                    echo 'Reverted last change.'
-                else
-                    echo 'Already at oldest change.'
-                fi
-                ;;
-            y|redo)
-                if [[ $redo ]]; then
-                    undo=("$($"format_kvp$fmt")" "${undo[@]}")
-                    printf '%s\n' "$redo" > "$tmp"
-                    redo=("${redo[@]:1}")
-                    parse "$tmp"
-                    rm -f "$tmp" 2> /dev/null
-                    modified=1
-                    echo 'Restored last change.'
-                else
-                    echo 'Already at latest change.'
-                fi
-                ;;
-            r|rename)
-                if [[ -z $name || -z $data ]]; then
-                    syntax $cmd key to
-                else
-                    save_undo
-                    modified=${key["$name"]}
-                    unset key["$name"]
-                    key["$data"]=$modified
-                    echo "Renamed key '$name' to '$data'."
-                fi
-                ;;
-            l|lower|lowercase)
-                if [[ -z $name ]]; then
-                    syntax $cmd key
-                else
-                    save_undo
-                    key["$name"]=${key["$name"],,}
-                    echo "Lowercased value of key '$name'."
-                fi
-                ;;
-            u|upper|uppercase)
-                if [[ -z $name ]]; then
-                    syntax $cmd key
-                else
-                    save_undo
-                    key["$name"]=${key["$name"]^^}
-                    echo "Uppercased value of key '$name'."
-                fi
-                ;;
-            '%'|sed)
-                if [[ -z $name || -z $data ]]; then
-                    syntax $cmd key script
-                else
-                    data=$(printf '%s\n' "${key["$name"]}" | sed -r "$data")
-                    retcode=$?
-                    if ((retcode == 0)); then
-                        save_undo
-                        key["$name"]=$data
-                        echo "Updated value of key '$name'."
-                    fi
-                fi
-                ;;
-            '~'|alias)
-                if [[ -z $name ]]; then
-                    syntax $cmd name command
-                else
-                    data=${data:-default}
-                    case "$name" in
-                        s|w|save|write)
-                            format_aliases > "$config/aliases/$data"
-                            echo "'$data' aliases file updated."
-                            ;;
-                        l|load)
-                            load_aliases "$data"
-                            ;;
-                        list)
-                            for name in "${!aliases[@]}"; do
-                                printf '%s: %s\n' "$name" "${aliases["$name"]}"
-                            done
-                            ;;
-                        *)
-                            if [[ $data ]]; then
-                                aliases["$name"]=$data
-                                echo "Alias '$name' created."
-                            else
-                                unset aliases["$name"]
-                                echo "Alias '$name' deleted."
-                            fi
-                            ;;
-                    esac
-                fi
-                ;;
-            f|fmt|format)
-                save_undo
-                fmt=$((!--fmt + 1))
-                ;;
-            o|open)
-                if [[ -z $LAUNCHER ]]; then
-                    echo 'No $LAUNCHER is set.'
-                else
-                    oifs=$IFS
-                    IFS=$'\n'
-                    shopt -s nullglob
-                    data=("${file%.*}".!("${file##*.}"))
-                    shopt -u nullglob
-                    IFS=$oifs
-                    count=${#data[@]}
-                    if [[ $count == 0 ]]; then
-                        echo 'No related files found.'
-                    elif [[ $count == 1 ]]; then
-                        echo "Opened $data with $LAUNCHER."
-                        $LAUNCHER "$data"
-                    else
-                        count=0
-                        for f in "${data[@]}"; do
-                            echo "$((count++)): $f"
-                        done
-                        read -e -p'Open which file (none to cancel)? ' f
-                        if [[ $f =~ '^[0-9]+$' && ${data["$f"]} ]]; then
-                            echo "Opened ${data[$f]} with $LAUNCHER."
-                            $LAUNCHER "${data[$f]}"
-                        else
-                            echo 'Invalid number selected.'
-                        fi
-                    fi
-                fi
-                ;;
-            w|write|save)
-                [[ -z $name || $name == '.' ]] &&
-                    name=$file
-                if [[ -z $data ]]; then
-                    data=$fmt
-                elif [[ $data != 1 ]]; then
-                    data=2
-                fi
-                $"format_kvp$data" > "$name"
-                fmt=$data
-                echo "Wrote KVP$data: $name"
-                unset modified
-                ;;
-            e|revert)
-                save_undo
-                parse "$file" ||
-                    return 1
-                echo 'Reverted all changes.'
-                unset modified
-                ;;
-            n|'>'|next|v|'<'|prev)
-                if [[ $cmd == @(n|>|next) ]]; then
-                    go=1
-                else
-                    go=-1
-                fi
-                next=$((index + go))
-                if ((next < 0)); then
-                    echo 'Already editing first file.'
-                    continue
-                elif ((next == ${#files[@]})); then
-                    echo 'Already editing last file.'
-                    continue
-                else
-                    index=$next
-                fi
-                ;&
-            q|quit|exit)
-                if [[ $modified ]]; then
-                    echo
-                    $"format_kvp$fmt"
-                    echo
-                    read -e -p'Save changes (Y/n)? ' save
-                    clear
-                    title
-                    if [[ -z $save || ${save,,} == 'y' ]]; then
-                        $"format_kvp$fmt" > "$file"
-                        echo "Wrote KVP$fmt: $file"
-                    fi
-                fi
-                break
-                ;;
             h|help|cmds|commands)
-                cmd_usage | less
                 ;;
             '')
                 ;;

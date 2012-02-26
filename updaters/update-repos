@@ -16,9 +16,15 @@ root_dir = os.path.join(os.path.expanduser('~'), 'Projects')
 tree = {
     'Configs': {
         'audio': {
-            'mpd': (
-                ('.config/mpd/mpd.conf', '(password +).*'),
-            ),
+            'mpd': {
+                '': (
+                    ('.config/mpd/mpd.conf', '(password +).*'),
+                ),
+                'ncmpcpp': (
+                    '.ncmpcpp/config',
+                    '.ncmpcpp/keys',
+                ),
+            },
             'alsa': (
                 '.asoundrc',
             ),
@@ -63,7 +69,7 @@ tree = {
             'pacman': (
                 '/etc/pacman.conf',
                 '/etc/pacman.d/mirrorlist',
-            )
+            ),
         },
         'text': {
             'vim': (
