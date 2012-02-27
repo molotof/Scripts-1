@@ -1,17 +1,18 @@
 #!/bin/bash
 ### wvm-kvp: Key-Value Pair Editor ####
-# Version 20120220-3 by Scott Garrett #
+# Version 20120227-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Optional Dependencies:
 # - wvm-open
 shopt -s extglob
 
-version=20120920-3
+version=20120927-1
 tmp="/tmp/desc-editor.txt"
 config="$HOME/.config/wvm-kvp"
 
-declare -A buffer paste aliases
+oifs=$IFS
+declare -A buffer paste aliases commands
 type -p nano > /dev/null &&
     EDITOR=${EDITOR:-nano} ||
     EDITOR=${EDITOR:-vi}
@@ -143,14 +144,6 @@ title () {
     echo '------------------------------------------'
 }
 
-syntax () {
-    IFS=' ' echo "Syntax: ${1#cmd_*} $(printf "<%s> " "${@:2}")"
-}
-
-successful () {
-    [[ $? == 0 ]]
-}
-
 stderr () {
     echo "$1" >&2
     continue
@@ -196,10 +189,6 @@ format_paste () {
             printf '%s\n' "$name: >" "${paste["$name"]}" '<'
         fi
     done < <(printf '%s\n' "${!paste[@]}" | sort)
-}
-
-deblank () {
-    sed '/./,$!d' "$1" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
 }
 
 validate () {
@@ -293,13 +282,21 @@ paste_key () {
     fi
 }
 
-paginate () {
-    # TODO
-    true
+prompt () {
+    printf '\n[KVP%s: %s]\n' "$fmt" "${file##*/}"
+    $"format_kvp$fmt" | sed -n "$buffer_offset,$((buffer_offset + 10))p"
+    printf '\n\n[Paste Buffer]\n'
+    format_paste | sed -n "$paste_offset,$((paste_offset + 10))p"
+    printf '\n\n'
+    read -e -p"$1> " cmd target data
+    clear
+    title
 }
 
 
+#######################
 ### Editor Commands ###
+#######################
 cmd_set () {
     case "$1" in
         '-i')
@@ -324,8 +321,8 @@ EOF
                     key "$1" > "$tmp"
                 fi
                 $EDITOR "$tmp"
-                text=$(deblank "$tmp")
-                if ! successful; then
+                text=$(sed -e :a -e '/./,$!;d/^\n*$/N;/\n$/ba' "$tmp")
+                if [[ $? != 0 ]]; then
                     stderr 'Empty value. No changes made.'
                     return 1
                 fi
@@ -339,7 +336,7 @@ EOF
                 text=${text%.*}
             fi
             key "$1" "$text" "$3"
-            echo "Updated value of $found key(s) matching '$name'."
+            echo "Updated value of $found key(s) matching '$1'."
             ;;
     esac
 }
@@ -357,7 +354,7 @@ with a space, if the key is not empty.
 EOF
             ;;
         *)
-            set "$1" "$2" ' '
+            cmd_set "$1" "$2" ' '
             ;;
     esac
 }
@@ -641,6 +638,24 @@ EOF
     esac
 }
 
+cmd_find () {
+    case "$1" in
+        '-i')
+            params=('key|*' '?string')
+            names=('/' 'search')
+            ;;
+        '-h')
+            cat <<'EOF'
+Searches for a key matching <key> or, if <string> is specified, for <string>
+in <key>. If <key> is '*', will search all keys.
+EOF
+            ;;
+        *)
+
+            ;;
+    esac
+}
+
 cmd_alias () {
     case "$1" in
         '-i')
@@ -649,6 +664,7 @@ cmd_alias () {
             ;;
         '-h')
             cat <<'EOF'
+Creates, modifies, saves, and loads single-word aliases to perform commands.
 EOF
             ;;
         *)
@@ -714,27 +730,26 @@ EOF
             if [[ -z $LAUNCHER ]]; then
                 echo 'No $LAUNCHER is set.'
             else
-                oifs=$IFS
-                IFS=$'\n'
+                local IFS=$'\n'
                 shopt -s nullglob
-                data=("${file%.*}".!("${file##*.}"))
+                local files=("${file%.*}".!("${file##*.}"))
                 shopt -u nullglob
                 IFS=$oifs
-                count=${#data[@]}
+                count=${#files[@]}
                 if [[ $count == 0 ]]; then
                     echo 'No related files found.'
                 elif [[ $count == 1 ]]; then
-                    echo "Opened $data with $LAUNCHER."
-                    $LAUNCHER "$data"
+                    echo "Opened $files with $LAUNCHER."
+                    $LAUNCHER "$files"
                 else
                     count=0
-                    for f in "${data[@]}"; do
+                    for f in "${files[@]}"; do
                         echo "$((count++)): $f"
                     done
-                    read -e -p'Open which file (none to cancel)? ' f
-                    if [[ $f =~ '^[0-9]+$' && ${data["$f"]} ]]; then
-                        echo "Opened ${data[$f]} with $LAUNCHER."
-                        $LAUNCHER "${data[$f]}"
+                    prompt 'Open which file (none to cancel)? '
+                    if [[ $f =~ '^[0-9]+$' && ${files["$f"]} ]]; then
+                        echo "Opened ${files[$f]} with $LAUNCHER."
+                        $LAUNCHER "${files[$f]}"
                     else
                         echo 'Invalid number selected.'
                     fi
@@ -800,6 +815,7 @@ cmd_go () {
             ;;
         '-h')
             cat <<'EOF'
+Jumps to the <index>-th file to edit.
 EOF
             ;;
         *)
@@ -860,7 +876,10 @@ You are currently here.  Press [q] to return to the editor.
 EOF
             ;;
         *)
-            cmd_usage | less
+            local command params param names name count
+            for command in $(compgen -A function cmd_ | sort); do
+                _cmd_usage ${command:4}
+            done | less
             ;;
     esac
 }
@@ -880,45 +899,42 @@ EOF
     esac
 }
 
-key_editor () {
-    local file=$1 cmd name data modified append undo=() redo=()
-    if [[ ${file##*.} != @(txt|text|desc|meta|kvp|rc|conf|cfg) ]]; then
-        echo "Related: $file"
-        file="${file%.*}.txt"
-    fi
-    echo "Parsing: $file"
-    if ! parse "$file"; then
-        echo 'Using blank KVP2.'
-        fmt=2
-    fi
-    while :; do
-        printf '\n[KVP%s: %s]\n' "$fmt" "${file##*/}"
-        $"format_kvp$fmt"
-        printf '\n\n[Paste Buffer]\n'
-        format_paste
-        printf '\n\n'
-        read -e -p'> ' cmd name data
-        clear
-        title
-        unset append go
-        cmd=${cmd,,}
-        name=${name,,}
-        [[ $cmd && ${aliases["$cmd"]} ]] &&
-            read cmd name data <<< "${aliases["$cmd"]}"
-        case "$cmd" in
-            h|help|cmds|commands)
-                ;;
-            '')
-                ;;
-            *)
-                echo 'Unknown command.'
-                ;;
-        esac
+load_commands () {
+    local command params param names name count
+    echo 'Initializing command functions...'
+    commands=()
+    for command in $(compgen -A function cmd_); do
+        unset params names count
+        $command -i
+        for name in ${command:4} ${names[@]}; do
+            commands[$name]=$command
+        done
+        for param in "${params[@]}"; do
+            [[ ${param:0:1} != '?' ]] &&
+                ((++count))
+        done
+        parameters[$command]=$count
     done
-    [[ -z $go ]] &&
-        unset index
-    return 0
 }
+
+_cmd_usage () {
+    local command params param names name count
+    unset params names count
+    if [[ -z ${commands["$1"]} ]]; then
+        echo "Unknown command: $1"
+        return 1
+    fi
+    command=${commands["$1"]}
+    $command -i
+    echo "${command:4}$(printf ' %s' "${params[@]}")"
+    echo "    Aliases:$(printf ' %s' "${names[@]}")"
+    parameters[$command]=$count
+    $command -h | tr '\n' ' ' | fold -s -w $((${COLUMNS:-40} - 4)) |
+        sed 's/^/    /'
+    echo
+    echo
+}
+
 
 
 ############
@@ -937,11 +953,53 @@ fi
 files=("$@")
 index=0
 
-mkdir -p "$config/aliases"
+mkdir -p "$config/"{aliases,plugins}
 clear
 title
+echo 'Loading plugins...'
+while read file; do
+    . "$file"
+done < <(find "$config/plugins" -type f)
+load_commands
 while [[ $index ]]; do
-    key_editor "${files[index]}" ||
-        break
+    unset modified
+    undo=()
+    redo=()
+    offset=0
+    file=${files[index]}
+    if [[ ${file##*.} != @(txt|text|desc|meta|kvp|rc|conf|cfg) ]]; then
+        echo "Related: $file"
+        file="${file%.*}.txt"
+    fi
+    echo "Parsing: $file"
+    if ! parse "$file"; then
+        echo 'Using blank KVP2.'
+        fmt=2
+    fi
+    while :; do
+        prompt
+        unset append go
+        cmd=${cmd,,}
+        target=${target,,}
+        [[ $cmd && ${aliases["$cmd"]} ]] &&
+            read cmd target data <<< "${aliases["$cmd"]}"
+        command=${commands["$cmd"]}
+        if [[ $command ]]; then
+            unset names params
+            $command -i
+            if [[ ${params[1]} && ${params[1]:0:1} != '?' ]]; then
+                [[ $data ]]
+            elif [[ ${params[0]} && ${params[0]:0:1} != '?' ]]; then
+                [[ $target ]]
+            fi
+            if [[ $? == 0 ]]; then
+                $command "$target" "$data"
+            else
+                _cmd_usage "$cmd"
+            fi
+        else
+            echo 'Unknown command.'
+        fi
+    done
 done
 echo 'Exiting.'
