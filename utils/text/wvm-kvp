@@ -1,13 +1,16 @@
 #!/bin/bash
 ### wvm-kvp: Key-Value Pair Editor ####
-# Version 20120227-1 by Scott Garrett #
+# Version 20120228-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Optional Dependencies:
 # - wvm-open
+#
+# TODO:
+# - Multi-line aliases
 shopt -s extglob
 
-version=20120927-1
+version=20120928-1
 tmp="/tmp/desc-editor.txt"
 config="$HOME/.config/wvm-kvp"
 
@@ -25,15 +28,15 @@ type -p open > /dev/null &&
 ### KVP File Parsing ###
 ########################
 parse () {
-    local name data trash
-    key=()
     if [[ ! -f "$1" ]]; then
-        echo "Not found."
+        stderr "Not found."
         return 1
     fi
+    local name data trash
+    buffer=()
     fmt=$(detect_fmt "$1" 2> /dev/null)
     if [[ -z $fmt ]]; then
-        echo "Unknown format."
+        stderr "Unknown format."
         return 2
     fi
     while IFS=$'\t' read name data trash; do
@@ -139,14 +142,12 @@ format_kvp2 () {
 ### Key Editor ###
 ##################
 title () {
-    echo '------------------------------------------'
-    echo "wvm-kvp $version - Key-Value Pair Editor"
-    echo '------------------------------------------'
+    echo "[wvm-kvp $version - Key-Value Pair Editor]"
+    echo
 }
 
 stderr () {
     echo "$1" >&2
-    continue
 }
 
 save_undo () {
@@ -228,7 +229,7 @@ key () {
         return 0
     elif [[ $2 ]]; then
         validate "$1" ||
-            continue
+            return 1
         found='new'
         if [[ $2 != ':u' ]]; then
             buffer["$1"]=$2
@@ -237,7 +238,7 @@ key () {
         fi
     else
         echo "No key matching '$1'."
-        continue
+        return 1
     fi
 }
 
@@ -269,7 +270,7 @@ paste_key () {
         return 0
     elif [[ $2 ]]; then
         validate "$1" ||
-            continue
+            return 1
         found='new'
         if [[ $2 != ':u' ]]; then
             paste["$1"]=$2
@@ -278,14 +279,25 @@ paste_key () {
         fi
     else
         echo "No key matching '$1'."
-        continue
+        return 1
     fi
 }
 
 prompt () {
-    printf '\n[KVP%s: %s]\n' "$fmt" "${file##*/}"
+    buffer_lines=$($"format_kvp$fmt" | wc -l)
+    paste_lines=$($"format_paste" | wc -l)
+    ((buffer_offset > buffer_lines)) &&
+        ((buffer_offset = buffer_lines))
+    ((buffer_offset < 1)) &&
+        buffer_offset=1
+    ((paste_offset > paste_lines)) &&
+        ((paste_offset = paste_lines))
+    ((paste_offset < 1)) &&
+        paste_offset=1
+    printf '\n(%2d,%2d) [KVP%s: %s]\n' $buffer_offset $((buffer_offset+10)) \
+        "$fmt" "${file##*/}"
     $"format_kvp$fmt" | sed -n "$buffer_offset,$((buffer_offset + 10))p"
-    printf '\n\n[Paste Buffer]\n'
+    printf '\n\n(%2d,%2d) [Paste Buffer]\n' $paste_offset $((paste_offset+10))
     format_paste | sed -n "$paste_offset,$((paste_offset + 10))p"
     printf '\n\n'
     read -e -p"$1> " cmd target data
@@ -293,10 +305,62 @@ prompt () {
     title
 }
 
+load_commands () {
+    local command params param names name count
+    echo 'Initializing command functions...'
+    commands=()
+    for command in $(compgen -A function cmd_); do
+        unset params names count
+        $command -i
+        for name in ${command:4} ${names[@]}; do
+            commands[$name]=$command
+        done
+        for param in "${params[@]}"; do
+            [[ ${param:0:1} != '?' ]] &&
+                ((++count))
+        done
+        parameters[$command]=$count
+    done
+}
+
+
 
 #######################
 ### Editor Commands ###
 #######################
+_cmd_template () {
+    case "$1" in
+        '-i')
+            params=()
+            names=()
+            ;;
+        '-h')
+            cat <<'EOF'
+EOF
+            ;;
+        *)
+            ;;
+    esac
+}
+
+_cmd_usage () {
+    local command params param names name count
+    unset params names count
+    if [[ -z ${commands["$1"]} ]]; then
+        echo "Unknown command: $1"
+        return 1
+    fi
+    command=${commands["$1"]}
+    $command -i
+    echo "${command:4}$(printf ' %s' "${params[@]}")"
+    echo "    Aliases:$(printf ' %s' "${names[@]}")"
+    parameters[$command]=$count
+    $command -h | tr '\n' ' ' | fold -s -w $((${COLUMNS:-40} - 4)) |
+        sed 's/^/    /'
+    echo
+    echo
+}
+
 cmd_set () {
     case "$1" in
         '-i')
@@ -312,16 +376,18 @@ substituted.
 EOF
             ;;
         *)
+            local text
             if [[ $2 ]]; then
                 text=$2
             else
                 if [[ $3 ]]; then
                     echo > "$tmp"
                 else
-                    key "$1" > "$tmp"
+                    key "$1" > "$tmp" ||
+                        return 1
                 fi
                 $EDITOR "$tmp"
-                text=$(sed -e :a -e '/./,$!;d/^\n*$/N;/\n$/ba' "$tmp")
+                text=$(sed -e :a -e '/./,$!d;/^\n*$/N;/\n$/ba' "$tmp")
                 if [[ $? != 0 ]]; then
                     stderr 'Empty value. No changes made.'
                     return 1
@@ -335,7 +401,8 @@ EOF
                 text=${file##*/}
                 text=${text%.*}
             fi
-            key "$1" "$text" "$3"
+            key "$1" "$text" "$3" ||
+                return 1
             echo "Updated value of $found key(s) matching '$1'."
             ;;
     esac
@@ -392,12 +459,12 @@ EOF
             ;;
         *)
             if [[ $2 == @(p|paste) ]]; then
-                paste_key "$1" :u
-                echo "Deleted $found paste key(s) matching '$1'."
+                paste_key "$1" :u &&
+                    echo "Deleted $found paste key(s) matching '$1'."
             fi
             if [[ -z $2 || $2 == @(a|all) ]]; then
-                key "$1" :u
-                echo "Deleted $found key(s) matching '$1'."
+                key "$1" :u &&
+                    echo "Deleted $found key(s) matching '$1'."
             fi
             ;;
     esac
@@ -441,7 +508,7 @@ EOF
 cmd_copy () {
     case "$1" in
         '-i')
-            params=('key' '?to')
+            params=('?key' '?to')
             names=('c')
             ;;
         '-h')
@@ -451,11 +518,14 @@ Copies key matching <key> to the paste buffer, optionally to different key(s)
 EOF
             ;;
         *)
+            local target name
             if [[ $1 ]]; then
                 target=${2:-$1}
-                key "$1"
+                key "$1" ||
+                    return 1
                 name=$found
-                paste_key "$target" "$value"
+                paste_key "$target" "$value" ||
+                    return 1
                 echo "Copied key '$name' as $found paste(s) matching '$target'."
             else
                 for name in "${!buffer[@]}"; do
@@ -470,7 +540,7 @@ EOF
 cmd_paste () {
     case "$1" in
         '-i')
-            params=('key' '?to')
+            params=('?key' '?to')
             names=('p')
             ;;
         '-h')
@@ -480,11 +550,14 @@ Pastes key matching <key> from the paste buffer, optionally to different key(s)
 EOF
             ;;
         *)
+            local target name
             if [[ $1 ]]; then
                 target=${2:-$1}
-                paste_key "$1"
+                paste_key "$1" ||
+                    return 1
                 name=$found
-                key "$target" "$value"
+                key "$target" "$value" ||
+                    return 1
                 echo "Pasted '$name' to $found key(s) matching '$target'."
             else
                 for name in "${!paste[@]}"; do
@@ -563,12 +636,15 @@ Renames key matching <key> to <name>.
 EOF
             ;;
         *)
+            local name
             validate "$2" ||
-                continue
-            key "$1"
+                return 1
+            key "$1 " ||
+                return 1
             name=$found
             unset buffer["$name"]
-            key "$2" "$value"
+            key "$2" "$value" ||
+                return 1
             echo "Renamed key '$name' to '$2'."
             ;;
     esac
@@ -586,9 +662,12 @@ Lowercases the value of key matching <key>.
 EOF
             ;;
         *)
-            key "$1"
+            local name
+            key "$1" ||
+                return 1
             name=$found
-            key "$name" "${value,,}"
+            key "$name" "${value,,}" ||
+                return 1
             echo "Lowercased value of key '$name'."
             ;;
     esac
@@ -606,9 +685,12 @@ Uppercases the value of key matching <key>.
 EOF
             ;;
         *)
-            key "$1"
+            local name
+            key "$1" ||
+                return 1
             name=$found
-            key "$name" "${value^^}"
+            key "$name" "${value^^}" ||
+                return 1
             echo "Uppercased value of key '$name'."
             ;;
     esac
@@ -627,11 +709,14 @@ Sets the value of key matching <key> to the result of a Sed operation using
 EOF
             ;;
         *)
-            key "$1"
+            local name
+            key "$1" ||
+                return 1
             name=$found
             value=$(printf '%s\n' "$value" | sed -r "$2")
             if [[ $? == 0 ]]; then
-                key "$name" "$value"
+                key "$name" "$value" ||
+                    return 1
                 echo "Updated value of key '$name'."
             fi
             ;;
@@ -668,7 +753,7 @@ Creates, modifies, saves, and loads single-word aliases to perform commands.
 EOF
             ;;
         *)
-            target=${2:-default}
+            local name target=${2:-default}
             case "$1" in
                 s|w|save|write)
                     format_aliases > "$config/aliases/$target"
@@ -735,7 +820,7 @@ EOF
                 local files=("${file%.*}".!("${file##*.}"))
                 shopt -u nullglob
                 IFS=$oifs
-                count=${#files[@]}
+                local count=${#files[@]}
                 if [[ $count == 0 ]]; then
                     echo 'No related files found.'
                 elif [[ $count == 1 ]]; then
@@ -745,7 +830,7 @@ EOF
                     count=0
                     for f in "${files[@]}"; do
                         echo "$((count++)): $f"
-                    done
+                    done | less -P'[Arrows] Scroll    [Q] Continue'
                     prompt 'Open which file (none to cancel)? '
                     if [[ $f =~ '^[0-9]+$' && ${files["$f"]} ]]; then
                         echo "Opened ${files[$f]} with $LAUNCHER."
@@ -762,23 +847,21 @@ EOF
 cmd_write () {
     case "$1" in
         '-i')
-            params=('?filepath' 'version')
+            params=('?filepath')
             names=('w' 'save')
             ;;
         '-h')
             cat <<'EOF'
 Writes main buffer to file, optionally to a different <filepath> than what was
 opened. '.' used as a filepath will write to the original file (default).
-Output is written in whichever KVP version it was opened in unless <version>
-is specified after the file path ('1' or '2').
 EOF
             ;;
         *)
+            local name
             [[ -z $1 || $1 == '.' ]] &&
                 name=$file
             $"format_kvp$fmt" > "$name"
-            fmt=$data
-            echo "Wrote KVP$data: $name"
+            echo "Wrote file: $name"
             unset modified
             ;;
     esac
@@ -794,7 +877,6 @@ cmd_revert () {
             cat <<'EOF'
 Revert main buffer to the last-saved state.
 EOF
-
             ;;
         *)
             save_undo
@@ -807,29 +889,121 @@ EOF
 }
 
 cmd_go () {
-    # Make aliases: prev, next = go -1, go +1
     case "$1" in
         '-i')
-            params=('index')
+            params=('?index')
             names=('g')
             ;;
         '-h')
             cat <<'EOF'
-Jumps to the <index>-th file to edit.
+Opens the <index>-th file in the list of files to edit. If <index> is left
+blank, will list the files and indexes.
 EOF
             ;;
         *)
-
-            if [[ ${1:0:1} == @('+'|'-') ]]; then
-                next=$((index $1))
+            if [[ $1 ]]; then
+                local next
+                if [[ ${1:0:1} == @('+'|'-') ]]; then
+                    next=$((index $1))
+                elif [[ $1 =~ ^[[:digit:]]+$ ]]; then
+                    next=$1
+                else
+                    stderr 'Invalid index.'
+                    return 1
+                fi
+                if [[ $next -lt 0 || $next -gt ${#files[@]} ]]; then
+                    stderr 'No file to edit past the specified point.'
+                    return 1
+                else
+                    index=$next
+                fi
             else
-                next=$1
+                local f count=0
+                for f in "${files[@]}"; do
+                    printf '%3d) %s\n' $((count++)) "$f"
+                done | less -P'[Arrows] Scroll    [Q] Go Back'
             fi
-            if [[ $next -lt 0 || $next -gt ${#files[@]} ]]; then
-                stderr 'Invalid index.'
-                return 1
+            ;;
+    esac
+}
+
+cmd_prev() {
+    case "$1" in
+        '-i')
+            params=('?count')
+            names=('<' 'v')
+            ;;
+        '-h')
+            cat <<'EOF'
+Opens the previous file in the list of files to edit. If <count> is specified,
+goes back this many files. Sam as `go -N`.
+EOF
+            ;;
+        *)
+            cmd_go -${1:-1}
+            ;;
+    esac
+}
+
+cmd_next () {
+    case "$1" in
+        '-i')
+            params=('?count')
+            names=('>' 'n')
+            ;;
+        '-h')
+            cat <<'EOF'
+Opens the next file in the list of files to edit. If <count> is specified,
+goes forward this many files. Same as `go +N`.
+EOF
+            ;;
+        *)
+            cmd_go +${1:-1}
+            ;;
+    esac
+}
+
+cmd_up () {
+    case "$1" in
+        '-i')
+            params=('?count' '?buffer')
+            names=('[')
+            ;;
+        '-h')
+            cat <<'EOF'
+Scrolls main buffer up one half-page, by default. If <count> is specifed, then
+scrolls up this many lines. If 'paste' is specified for <buffer>, will scroll
+the paste buffer, instead.
+EOF
+            ;;
+        *)
+            if [[ $2 != 'paste' ]]; then
+                ((buffer_offset-=${1:-5}))
             else
-                index=$next
+                ((paste_offset-=${1:-5}))
+            fi
+            ;;
+    esac
+}
+
+cmd_dn () {
+    case "$1" in
+        '-i')
+            params=('?count' '?buffer')
+            names=(']')
+            ;;
+        '-h')
+            cat <<'EOF'
+Scrolls main buffer down one half-page, by default. If <count> is specifed, then
+scrolls down this many lines. If 'paste' is specified for <buffer>, will scroll
+the paste buffer, instead.
+EOF
+            ;;
+        *)
+            if [[ $2 != 'paste' ]]; then
+                ((buffer_offset+=${1:-5}))
+            else
+                ((paste_offset+=${1:-5}))
             fi
             ;;
     esac
@@ -848,18 +1022,13 @@ EOF
             ;;
         *)
             if [[ $modified ]]; then
-                echo
-                $"format_kvp$fmt"
-                echo
-                read -e -p'Save changes (Y/n)? ' save
-                clear
-                title
-                if [[ -z $save || ${save,,} == 'y' ]]; then
+                prompt 'Save changes (Y/n)? '
+                if [[ -z $cmd || ${cmd,,} == 'y' ]]; then
                     $"format_kvp$fmt" > "$file"
                     echo "Wrote KVP$fmt: $file"
                 fi
             fi
-            break
+            unset index
             ;;
     esac
 }
@@ -872,67 +1041,16 @@ cmd_help () {
             ;;
         '-h')
             cat <<'EOF'
-You are currently here.  Press [q] to return to the editor.
+You are currently here. Press [q] to return to the editor.
 EOF
             ;;
         *)
-            local command params param names name count
+            local command
             for command in $(compgen -A function cmd_ | sort); do
                 _cmd_usage ${command:4}
-            done | less
+            done | less -P'[Arrows] Scroll    [Q] Go Back'
             ;;
     esac
-}
-
-_cmd_template () {
-    case "$1" in
-        '-i')
-            params=()
-            names=()
-            ;;
-        '-h')
-            cat <<'EOF'
-EOF
-            ;;
-        *)
-            ;;
-    esac
-}
-
-load_commands () {
-    local command params param names name count
-    echo 'Initializing command functions...'
-    commands=()
-    for command in $(compgen -A function cmd_); do
-        unset params names count
-        $command -i
-        for name in ${command:4} ${names[@]}; do
-            commands[$name]=$command
-        done
-        for param in "${params[@]}"; do
-            [[ ${param:0:1} != '?' ]] &&
-                ((++count))
-        done
-        parameters[$command]=$count
-    done
-}
-
-_cmd_usage () {
-    local command params param names name count
-    unset params names count
-    if [[ -z ${commands["$1"]} ]]; then
-        echo "Unknown command: $1"
-        return 1
-    fi
-    command=${commands["$1"]}
-    $command -i
-    echo "${command:4}$(printf ' %s' "${params[@]}")"
-    echo "    Aliases:$(printf ' %s' "${names[@]}")"
-    parameters[$command]=$count
-    $command -h | tr '\n' ' ' | fold -s -w $((${COLUMNS:-40} - 4)) |
-        sed 's/^/    /'
-    echo
-    echo
 }
 
 
@@ -965,7 +1083,9 @@ while [[ $index ]]; do
     unset modified
     undo=()
     redo=()
-    offset=0
+    buffer_offset=1
+    paste_offset=1
+    cindex=$index
     file=${files[index]}
     if [[ ${file##*.} != @(txt|text|desc|meta|kvp|rc|conf|cfg) ]]; then
         echo "Related: $file"
@@ -976,13 +1096,15 @@ while [[ $index ]]; do
         echo 'Using blank KVP2.'
         fmt=2
     fi
-    while :; do
+    while [[ $index == $cindex ]]; do
         prompt
         unset append go
         cmd=${cmd,,}
         target=${target,,}
         [[ $cmd && ${aliases["$cmd"]} ]] &&
             read cmd target data <<< "${aliases["$cmd"]}"
+        [[ -z $cmd ]] &&
+            continue
         command=${commands["$cmd"]}
         if [[ $command ]]; then
             unset names params
