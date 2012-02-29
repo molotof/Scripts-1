@@ -1,20 +1,20 @@
 #!/bin/bash
 ### wvm-kvp: Key-Value Pair Editor ####
-# Version 20120228-1 by Scott Garrett #
+# Version 20120228-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Optional Dependencies:
 # - wvm-open
 #
-# TODO:
-# - Multi-line aliases
 shopt -s extglob
 
-version=20120928-1
+version=20120928-2
 tmp="/tmp/desc-editor.txt"
 config="$HOME/.config/wvm-kvp"
 
 oifs=$IFS
+LINES=$(tput lines)
+LINES=${LINES:-24}
 declare -A buffer paste aliases commands
 type -p nano > /dev/null &&
     EDITOR=${EDITOR:-nano} ||
@@ -57,7 +57,7 @@ detect_fmt () {
             print "2"
             exit
         }
-        /^[[:alnum:]_.-]+$/ {
+        /^[^[:blank:]][^:]+$/ {
             print "1"
             exit
         }
@@ -69,8 +69,10 @@ parse_kvp1 () {
         BEGIN {
             name = ""
         }
-        /^[[:alnum:]_.-]/ {
-            sub(/\s+$/, "", $0)
+        /^[^[:blank:]][^:]+/ {
+            sub(/[[:blank:]\]]+$/, "", $0)
+            sub(/^\[+/, "", $0)
+            gsub(/[^[:alnum:]_.-]/, "-", $0)
             name = $0
             next
         }
@@ -192,10 +194,24 @@ format_paste () {
     done < <(printf '%s\n' "${!paste[@]}" | sort)
 }
 
-validate () {
+bs_split () {
+    local IFS='\'
+    set -f
+    printf '%s\n' $1
+    set +f
+}
+
+validname () {
     [[ $1 =~ ^[[:alnum:]._-]+$ ]] &&
         return 0
     echo 'Key not found or invalid key name.'
+    return 1
+}
+
+isnumber () {
+    [[ $1 =~ ^[[:digit:]]+$ ]] &&
+        return 0
+    echo 'Expected value was not a number.'
     return 1
 }
 
@@ -228,7 +244,7 @@ key () {
             value=${buffer["$name"]}
         return 0
     elif [[ $2 ]]; then
-        validate "$1" ||
+        validname "$1" ||
             return 1
         found='new'
         if [[ $2 != ':u' ]]; then
@@ -269,7 +285,7 @@ paste_key () {
             value=${paste["$name"]}
         return 0
     elif [[ $2 ]]; then
-        validate "$1" ||
+        validname "$1" ||
             return 1
         found='new'
         if [[ $2 != ':u' ]]; then
@@ -284,6 +300,11 @@ paste_key () {
 }
 
 prompt () {
+    LINES=$(tput lines) 2> /dev/null
+    LINES=${LINES:-24}
+    COLUMNS=$(tput cols) 2> /dev/null
+    COLUMNS=${COLUMNS:-40}
+    local h=$(((LINES - 12) / 2))
     buffer_lines=$($"format_kvp$fmt" | wc -l)
     paste_lines=$($"format_paste" | wc -l)
     ((buffer_offset > buffer_lines)) &&
@@ -294,13 +315,17 @@ prompt () {
         ((paste_offset = paste_lines))
     ((paste_offset < 1)) &&
         paste_offset=1
-    printf '\n(%2d,%2d) [KVP%s: %s]\n' $buffer_offset $((buffer_offset+10)) \
+    printf '\n%3d,%d: [KVP%s: %s]\n' $buffer_offset $((buffer_offset + h)) \
         "$fmt" "${file##*/}"
-    $"format_kvp$fmt" | sed -n "$buffer_offset,$((buffer_offset + 10))p"
-    printf '\n\n(%2d,%2d) [Paste Buffer]\n' $paste_offset $((paste_offset+10))
-    format_paste | sed -n "$paste_offset,$((paste_offset + 10))p"
+    $"format_kvp$fmt" | fold -s -w $COLUMNS |
+        sed -n "$buffer_offset,$((buffer_offset + h))p"
+    printf '\n\n%3d,%d: [Paste Buffer]\n' $paste_offset $((paste_offset + h))
+    format_paste | fold -s -w $COLUMNS |
+        sed -n "$paste_offset,$((paste_offset + h))p"
     printf '\n\n'
-    read -e -p"$1> " cmd target data
+    read -e -p"$1> " line
+    [[ $line && ${aliases["${line%% *}"]} ]] &&
+        line=${aliases["${line%% *}"]}
     clear
     title
 }
@@ -355,7 +380,7 @@ _cmd_usage () {
     echo "${command:4}$(printf ' %s' "${params[@]}")"
     echo "    Aliases:$(printf ' %s' "${names[@]}")"
     parameters[$command]=$count
-    $command -h | tr '\n' ' ' | fold -s -w $((${COLUMNS:-40} - 4)) |
+    $command -h | tr '\n' ' ' | fold -s -w $((COLUMNS - 4)) |
         sed 's/^/    /'
     echo
     echo
@@ -383,7 +408,9 @@ EOF
                 if [[ $3 ]]; then
                     echo > "$tmp"
                 else
-                    key "$1" > "$tmp" ||
+                    key "$1" ||
+                        return 1
+                    echo "$value" > "$tmp" ||
                         return 1
                 fi
                 $EDITOR "$tmp"
@@ -395,7 +422,7 @@ EOF
                 rm -f "$tmp"
             fi
             if [[ -z $text ]]; then
-                stdout 'Empty value.  No changes made.'
+                stderr 'Empty value.  No changes made.'
                 return 1
             elif [[ $text == '.' ]]; then
                 text=${file##*/}
@@ -637,7 +664,7 @@ EOF
             ;;
         *)
             local name
-            validate "$2" ||
+            validname "$2" ||
                 return 1
             key "$1 " ||
                 return 1
@@ -815,7 +842,7 @@ EOF
             if [[ -z $LAUNCHER ]]; then
                 echo 'No $LAUNCHER is set.'
             else
-                local IFS=$'\n'
+                local line IFS=$'\n'
                 shopt -s nullglob
                 local files=("${file%.*}".!("${file##*.}"))
                 shopt -u nullglob
@@ -832,11 +859,11 @@ EOF
                         echo "$((count++)): $f"
                     done | less -P'[Arrows] Scroll    [Q] Continue'
                     prompt 'Open which file (none to cancel)? '
-                    if [[ $f =~ '^[0-9]+$' && ${files["$f"]} ]]; then
-                        echo "Opened ${files[$f]} with $LAUNCHER."
-                        $LAUNCHER "${files[$f]}"
+                    if isnumber "$line" && [[ ${files["$line"]} ]]; then
+                        echo "Opened ${files[$line]} with $LAUNCHER."
+                        $LAUNCHER "${files[$line]}"
                     else
-                        echo 'Invalid number selected.'
+                        return 1
                     fi
                 fi
             fi
@@ -905,14 +932,14 @@ EOF
                 local next
                 if [[ ${1:0:1} == @('+'|'-') ]]; then
                     next=$((index $1))
-                elif [[ $1 =~ ^[[:digit:]]+$ ]]; then
+                elif isnumber "$1"; then
                     next=$1
                 else
                     stderr 'Invalid index.'
                     return 1
                 fi
                 if [[ $next -lt 0 || $next -gt ${#files[@]} ]]; then
-                    stderr 'No file to edit past the specified point.'
+                    stderr 'No file to edit at the specified point.'
                     return 1
                 else
                     index=$next
@@ -977,10 +1004,13 @@ the paste buffer, instead.
 EOF
             ;;
         *)
+            count=${1:-$((LINES / 2))}
+            isnumber "$count" ||
+                return 1
             if [[ $2 != 'paste' ]]; then
-                ((buffer_offset-=${1:-5}))
+                ((buffer_offset -= count))
             else
-                ((paste_offset-=${1:-5}))
+                ((paste_offset -= count))
             fi
             ;;
     esac
@@ -1000,10 +1030,37 @@ the paste buffer, instead.
 EOF
             ;;
         *)
+            count=${1:-$((LINES / 2))}
+            isnumber "$count" ||
+                return 1
             if [[ $2 != 'paste' ]]; then
-                ((buffer_offset+=${1:-5}))
+                ((buffer_offset += count))
             else
-                ((paste_offset+=${1:-5}))
+                ((paste_offset += count))
+            fi
+            ;;
+    esac
+}
+
+cmd_jump () {
+    case "$1" in
+        '-i')
+            params=('line' '?buffer')
+            names=('j')
+            ;;
+        '-h')
+            cat <<'EOF'
+Jumps to <line>. If 'paste' is specified for <buffer>, will jump to the line in
+the paste buffer, instead.
+EOF
+            ;;
+        *)
+            isnumber "$1" ||
+                return 1
+            if [[ $2 != 'paste' ]]; then
+                buffer_offset=$1
+            else
+                paste_offset=$1
             fi
             ;;
     esac
@@ -1021,9 +1078,10 @@ Exits the editor.
 EOF
             ;;
         *)
+            local line
             if [[ $modified ]]; then
                 prompt 'Save changes (Y/n)? '
-                if [[ -z $cmd || ${cmd,,} == 'y' ]]; then
+                if [[ -z $line || ${line,,} == 'y' ]]; then
                     $"format_kvp$fmt" > "$file"
                     echo "Wrote KVP$fmt: $file"
                 fi
@@ -1062,7 +1120,7 @@ EOF
 if [[ -z $1 || $1 == @('-h'|'--help') ]]; then
     echo "wvm-kvp - Key-Value Pair Editor"
     echo "Version $version by Scott Garrett"
-    echo "Wintervenom [(at)] gmail.com"
+    echo "Wintervenom [(at)] archlinux.us"
     echo
     echo "Usage: ${0##*/} <file ...>"
     exit 2
@@ -1074,7 +1132,7 @@ index=0
 mkdir -p "$config/"{aliases,plugins}
 clear
 title
-echo 'Loading plugins...'
+echo 'Loading plug-ins...'
 while read file; do
     . "$file"
 done < <(find "$config/plugins" -type f)
@@ -1098,30 +1156,30 @@ while [[ $index ]]; do
     fi
     while [[ $index == $cindex ]]; do
         prompt
-        unset append go
-        cmd=${cmd,,}
-        target=${target,,}
-        [[ $cmd && ${aliases["$cmd"]} ]] &&
-            read cmd target data <<< "${aliases["$cmd"]}"
-        [[ -z $cmd ]] &&
-            continue
-        command=${commands["$cmd"]}
-        if [[ $command ]]; then
-            unset names params
-            $command -i
-            if [[ ${params[1]} && ${params[1]:0:1} != '?' ]]; then
-                [[ $data ]]
-            elif [[ ${params[0]} && ${params[0]:0:1} != '?' ]]; then
-                [[ $target ]]
-            fi
-            if [[ $? == 0 ]]; then
-                $command "$target" "$data"
+        for line in "$(bs_split "$line")"; do
+            read cmd target data <<< "$line"
+            [[ -z $cmd ]] &&
+                continue
+            cmd=${cmd,,}
+            target=${target,,}
+            command=${commands["$cmd"]}
+            if [[ $command ]]; then
+                unset names params
+                $command -i
+                if [[ ${params[1]} && ${params[1]:0:1} != '?' ]]; then
+                    [[ $data ]]
+                elif [[ ${params[0]} && ${params[0]:0:1} != '?' ]]; then
+                    [[ $target ]]
+                fi
+                if [[ $? == 0 ]]; then
+                    $command "$target" "$data"
+                else
+                    _cmd_usage "$cmd"
+                fi
             else
-                _cmd_usage "$cmd"
+                echo "Unknown command '$cmd'."
             fi
-        else
-            echo 'Unknown command.'
-        fi
+        done
     done
 done
 echo 'Exiting.'
