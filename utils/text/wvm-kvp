@@ -1,6 +1,6 @@
 #!/bin/bash
 ### wvm-kvp: Key-Value Pair Editor ####
-# Version 20120228-2 by Scott Garrett #
+# Version 20120229-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 # Optional Dependencies:
@@ -8,7 +8,7 @@
 #
 shopt -s extglob
 
-version=20120928-2
+version=20120929-1
 tmp="/tmp/desc-editor.txt"
 config="$HOME/.config/wvm-kvp"
 

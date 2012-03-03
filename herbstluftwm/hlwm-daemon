@@ -1,2 +1,3 @@
 #!/bin/bash
-mkfifo
+### HLWM Daemon ###
+mkfifo "

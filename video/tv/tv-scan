@@ -7,7 +7,7 @@ dups=0
 if [[ -z "$1" ]]; then
     if ! [[ -e "$tuning" ]]; then
         mkdir -p "${tuning%/*}"
-        w_scan -fa -A2 -c US -E0 -t2 -x >> "$tuning"
+        w_scan -fa -A2 -c US -E0 -t2 -RO -E0 -x >> "$tuning"
     fi
     scan -t1 -A2 -x0 -t1 "$tuning" > "$tmp"
 else

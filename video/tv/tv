@@ -5,7 +5,7 @@
 ################################
 chans="$HOME/.mplayer/channels.conf"
 prog=0
-cache=1
+cache=2
 restarts=0
 ts='[%d-%a-%y %H%M.%S]'
 lock='/tmp/tv.lock'

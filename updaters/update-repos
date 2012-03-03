@@ -70,6 +70,10 @@ tree = {
                 '/etc/pacman.conf',
                 '/etc/pacman.d/mirrorlist',
             ),
+            'portage': (
+                '/etc/make.conf',
+                '/etc/portage/package.*',
+            ),
         },
         'text': {
             'vim': (
