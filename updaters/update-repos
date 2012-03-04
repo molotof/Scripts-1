@@ -55,6 +55,8 @@ tree = {
         'shell': {
             'bash': (
                 '.bashrc',
+                '.bash_profile',
+                '.bash_logout',
             ),
         },
         'status': {
