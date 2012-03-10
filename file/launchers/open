@@ -339,7 +339,7 @@ default_config () {
 #class_handler['*/vnd.@(oasis|ms-|openxml)']='libreoffice'
 #class_handler['@(audio|video)/*']='urxvt -e mplayer'
 #class_handler['application/*zip ']='wvm-open_archive'
-#class_handler['image/*']='mirage'
+#class_handler['image/*']=$BROWSER
 #class_handler['magnet']='qbittorrent'
 
 # Map [<extensions>] to <class>.

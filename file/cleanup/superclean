@@ -89,7 +89,7 @@ for target in ${scan_incinerate[@]}; do
 done
 
 [ $verbose ] && echo "Vacuuming Firefox SQLite databases..."
-for f in $HOME/.mozilla/firefox/*/*.sqlite; do sqlite3 $f 'VACUUM;'; done
+for f in $HOME/.mozilla/firefox/*/*.sqlite; do sqlite3 $f 'VACUUM; REINDEX;'; done
 
 if [ $wipefree ]; then
     [ $verbose ] && echo "Wiping free space (this may take a long-ass time)..."
