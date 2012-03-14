@@ -143,6 +143,7 @@ tree = {
                 'bin/dl',
                 'bin/vkdl',
                 'bin/ytdl',
+                'bin/ytdl-mplayer',
             ),
             'ip': (
                 'bin/toggle-host*',
