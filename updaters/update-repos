@@ -14,7 +14,7 @@ import datetime
 
 root_dir = os.path.join(os.path.expanduser('~'), 'Projects')
 tree = {
-    'Configs': {
+    'Configuration': {
         'audio': {
             'mpd': {
                 '': (
@@ -30,12 +30,6 @@ tree = {
             ),
         },
         'client': {
-            'newsbeuter': (
-                ('.config/newsbeuter/config', '((login|password) +).*'),
-            ),
-            'mutt': (
-                ('.muttrc', '((_pass|_url|_user|realname) *= *).*'),
-            ),
             'rtorrent': (
                 '.rtorrent.rc',
             ),
