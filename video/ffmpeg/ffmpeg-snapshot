@@ -1,0 +1,6 @@
+#!/bin/bash
+DISPLAY=:0.0
+xset dpms force on
+if [[ "$1" ]]; then
+    ffmpeg -f video4linux2 -i /dev/video0 -s 640x480 -r 30 -vframes 1 -ss 5 "$1"
+fi

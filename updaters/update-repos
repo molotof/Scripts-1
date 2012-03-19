@@ -243,6 +243,10 @@ tree = {
                 'bin/tv',
                 'bin/tv-scan',
             ),
+            'ffmpeg': (
+                'bin/ffmpeg-andrioid',
+                'bin/ffmpeg-snapshot',
+            ),
         },
         'wm': {
             'dwm': (
