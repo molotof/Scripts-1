@@ -244,7 +244,7 @@ tree = {
                 'bin/tv-scan',
             ),
             'ffmpeg': (
-                'bin/ffmpeg-andrioid',
+                'bin/ffmpeg-android',
                 'bin/ffmpeg-snapshot',
             ),
         },
