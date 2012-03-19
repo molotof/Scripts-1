@@ -1,0 +1,42 @@
+#!/bin/sh
+### Hosts File Updater ############
+# Version 0.3 by Scott Garrett    #
+# Wintervenom [(at)] archlinux.us #
+###################################
+if [ $UID != 0 ]; then
+    echo 'Please run as root, por favor.'
+    exit 1
+elif [ -d /data ]; then
+    tmp=/data/tmp
+    android=1
+else
+    tmp=/tmp
+fi
+[ $android ] &&
+    mount -o remount,rw /
+mkdir -p $tmp
+tmp=$tmp/hosts
+[ -f $tmp ] &&
+    rm -f $tmp
+sed -i '/\#START HOSTS APPEND/,/#END HOSTS APPEND/d' /etc/hosts
+urls='http://www.mvps.org/winhelp2002/hosts.txt'
+echo 'Downloading blacklists...'
+for url in $urls; do
+    echo -n "Downloading '$url'... "
+    wget -cq -T30 "$url" -O- >> /tmp/hosts
+    if [ $? == 0 ]; then
+        echo 'OK'
+    else
+        echo 'FAIL'
+    fi
+done
+if [ -f $tmp ]; then
+    echo "#START HOSTS APPEND" >> /etc/hosts
+    grep '^127' $tmp |
+        sed 's/^127\.0\.0\.1\s*/0.0.0.0 /g; s/ #.*//; s/\x0D$//' |
+        sort -u >> /etc/hosts
+    echo "#END HOSTS APPEND" >> /etc/hosts
+    rm $tmp
+fi
+[ $android ] &&
+    mount -o remount,ro /
