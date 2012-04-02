@@ -15,7 +15,10 @@ max_count=1000
 sleep_time='2h'
 
 
-urldecode () { echo -e "$(sed 'y/+/ /;s/%/\\x/g')"; }
+urldecode () {
+    echo -e "$(sed 'y/+/ /;s/%/\\x/g')"
+}
+
 while :; do
     mkdir -p "$music_dir" "$tmp_dir"
     if [ ! -f "$list.queue" ]; then
@@ -34,7 +37,7 @@ while :; do
         while :; do
             if wget -O "$list.remote" "$remote_list"; then
                 echo 'Filtering remote track list (1/2)...'
-                tmp_list="$list.remote"
+            tmp_list="$list.remote"
                 if [ $skip_count -gt 0 ]; then
                     tmp_list="$list.queue~"
                 grep -Fvf "$list.skip" "$list.remote" > "$tmp_list"
@@ -42,6 +45,7 @@ while :; do
                 echo 'Filtering remote track list (2/2)...'
                 head -n $count "$tmp_list" > "$list.queue"
                 rm "$tmp_list" "$list.remote" 2> /dev/null
+                echo 'Done.'
                 break
             else
                 echo "Failed to get remote track list. Trying again in 1m."
@@ -53,7 +57,11 @@ while :; do
         c_file=$(echo "$file" | urldecode | sed 's:/: - :g' |
             tr -c '[:alnum:][:punct:] \n' '_')
         for n in 1 2 3; do
-            if wget -c -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
+            if [ -f "$music_dir/$c_file" ]; then
+                echo "Skipping $file."
+                echo "$file" >> "$list.skip"
+                break
+            elif wget -c -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
                 echo "Moving $c_file to music directory."
                 mv "$tmp_dir/$c_file" "$music_dir/"
                 echo "$file" >> "$list.skip"
@@ -68,3 +76,4 @@ while :; do
     rm "$list.queue"
     sleep 5
 done
+
