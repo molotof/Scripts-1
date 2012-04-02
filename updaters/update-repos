@@ -138,6 +138,7 @@ tree = {
                 'bin/vkdl',
                 'bin/ytdl',
                 'bin/ytdl-mplayer',
+                'bin/music-populate',
             ),
             'ip': (
                 'bin/toggle-host*',

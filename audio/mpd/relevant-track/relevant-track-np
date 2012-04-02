@@ -9,7 +9,7 @@
 basename=${0##*/}
 set -f
 cache="$HOME/.cache/relevant-track.cache"
-status="$USER"
+status="$USER overrode relevant-track."
 if [[ "$cache" ]]; then
     IFS=$'\t'
     trigger=($(tail -10 "$cache" | grep -F "$(mpc current -f '%file%')" | cut -f2-))

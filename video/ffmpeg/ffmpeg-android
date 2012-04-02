@@ -17,8 +17,8 @@ cleanup () {
 convert () {
     nf="$d/${1%.*}"
     ffmpeg -y -i "$1" -nodump -acodec libfaac -ac 2 -ab 128k -vcodec libx264 \
-        -vf "scale=trunc(oh*a/2)*2:240,unsharp" -r 23.976 \
-        -vpre slow -vpre ipod640 -f mp4 "$nf.tmp.mp4"
+        -vf "scale=trunc(oh*a/2)*2:240,unsharp" -vpre slow -vpre ipod640 \
+        -f mp4 "$nf.tmp.mp4"
     [[ $? != 0 ]] &&
         echo "$f" >> "failed.${0##*/}.log"
     if [[ -f "$nf.tmp.mp4" ]]; then

@@ -1,0 +1,62 @@
+#!/bin/bash
+### Music Populator (Android) #####
+# Ver 20120204-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us #
+###################################
+
+host='demonpit.archlinux.tk'
+remote_list="$host/msync-list.php?c=ls"
+remote_dir="$host/Music/Library"
+music_dir='/mnt/sdcard/Music'
+tmp_dir='/mnt/sdcard/.tmp'
+list="$music_dir/.list"
+
+max_count=10
+sleep_time='2h'
+
+
+
+while :; do
+    mkdir -p "$music_dir" "$tmp_dir"
+    if [ ! -f "$list.queue" ]; then
+        echo 'Scanning music library...'
+        count=$(find "$music_dir" -type f \( -iname "*.mp3" -o \
+            -iname "*.ogg" \) | wc -l)
+        count=$((max_count - count))
+        if [ $count -lt 1 ]; then
+            echo "Library fully populated. Sleeping for $sleep_time."
+            sleep $sleep_time
+            continue
+        fi
+        touch "$list.skip"
+        while :; do
+            if wget -O "$list.remote" "$remote_list"; then
+                grep -Fvf "$list.skip" "$list.remote" |
+                    head -n $count > "$list.queue"
+                rm "$list.remote"
+                break
+            else
+                echo "Failed to get remote track list. Trying again in 1m."
+                sleep 60
+            fi
+        done
+    fi
+    while read file; do
+        c_file=$(echo "$file" | sed 's:/: - :g' |
+            tr -c '[:alnum:][:punct:] \n' '_')
+        for n in 1 2 3; do
+            if wget -c -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
+                echo "Moving $c_file to music directory."
+                mv "$tmp_dir/$c_file" "$music_dir/"
+                echo "$file" >> "$list.skip"
+                break
+            else
+                echo "Failed to download $file. Trying again in 15s."
+                sleep 15
+            fi
+        done
+    done < "$list.queue"
+    echo 'Done re-populating library.'
+    rm "$list.queue"
+    sleep 5
+done
