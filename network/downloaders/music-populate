@@ -4,18 +4,18 @@
 # Wintervenom [(at)] archlinux.us #
 ###################################
 
-host='demonpit.archlinux.tk'
+host='http://demonpit.archlinux.tk:8000'
 remote_list="$host/msync-list.php?c=ls"
 remote_dir="$host/Music/Library"
 music_dir='/mnt/sdcard/Music'
 tmp_dir='/mnt/sdcard/.tmp'
 list="$music_dir/.list"
 
-max_count=10
+max_count=1000
 sleep_time='2h'
 
 
-
+urldecode () { echo -e "$(sed 'y/+/ /;s/%/\\x/g')"; }
 while :; do
     mkdir -p "$music_dir" "$tmp_dir"
     if [ ! -f "$list.queue" ]; then
@@ -28,12 +28,20 @@ while :; do
             sleep $sleep_time
             continue
         fi
-        touch "$list.skip"
+        skip_count=0
+        [ -f "$list.skip" ] &&
+            skip_count=$(wc -l < "$list.skip")
         while :; do
             if wget -O "$list.remote" "$remote_list"; then
-                grep -Fvf "$list.skip" "$list.remote" |
-                    head -n $count > "$list.queue"
-                rm "$list.remote"
+                echo 'Filtering remote track list (1/2)...'
+                tmp_list="$list.remote"
+                if [ $skip_count -gt 0 ]; then
+                    tmp_list="$list.queue~"
+                grep -Fvf "$list.skip" "$list.remote" > "$tmp_list"
+            fi
+                echo 'Filtering remote track list (2/2)...'
+                head -n $count "$tmp_list" > "$list.queue"
+                rm "$tmp_list" "$list.remote" 2> /dev/null
                 break
             else
                 echo "Failed to get remote track list. Trying again in 1m."
@@ -42,7 +50,7 @@ while :; do
         done
     fi
     while read file; do
-        c_file=$(echo "$file" | sed 's:/: - :g' |
+        c_file=$(echo "$file" | urldecode | sed 's:/: - :g' |
             tr -c '[:alnum:][:punct:] \n' '_')
         for n in 1 2 3; do
             if wget -c -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
