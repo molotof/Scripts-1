@@ -37,11 +37,11 @@ while :; do
         while :; do
             if wget -O "$list.remote" "$remote_list"; then
                 echo 'Filtering remote track list (1/2)...'
-            tmp_list="$list.remote"
+	        tmp_list="$list.remote"
                 if [ $skip_count -gt 0 ]; then
                     tmp_list="$list.queue~"
-                grep -Fvf "$list.skip" "$list.remote" > "$tmp_list"
-            fi
+	            grep -Fvf "$list.skip" "$list.remote" > "$tmp_list"
+	        fi
                 echo 'Filtering remote track list (2/2)...'
                 head -n $count "$tmp_list" > "$list.queue"
                 rm "$tmp_list" "$list.remote" 2> /dev/null
