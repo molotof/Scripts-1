@@ -1,6 +1,6 @@
 #!/bin/sh
 ### Music Populator (Android) #####
-# Ver 20120204-1 by Scott Garrett #
+# Ver 20120406-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us #
 ###################################
 
@@ -11,7 +11,7 @@ music_dir='/mnt/sdcard/Music'
 tmp_dir='/mnt/sdcard/.tmp'
 list="$music_dir/.list"
 
-max_count=1000
+max_count=1500
 sleep_time='2h'
 
 
@@ -19,23 +19,54 @@ urldecode () {
     echo -e "$(sed 'y/+/ /;s/%/\\x/g')"
 }
 
+led () {
+    if [ $blink ]; then
+        kill $blink
+        unset blink
+    fi
+    echo $1 > /sys/class/leds/button-backlight/brightness
+}
+
+led_blink () {
+    led 0
+    while :; do
+        led 1
+        sleep $1
+        led 0
+        sleep $1
+    done &
+    blink=$! # Derp.
+}
+
+led_alarm () {
+    led 0
+    for n in 1 2 3 4 5 6 7 8 9 0; do
+        led 1
+        led 0
+    done
+}
+
 while :; do
     mkdir -p "$music_dir" "$tmp_dir"
     if [ ! -f "$list.queue" ]; then
+        led_blink 2
         echo 'Scanning music library...'
         count=$(find "$music_dir" -type f \( -iname "*.mp3" -o \
             -iname "*.ogg" \) | wc -l)
         count=$((max_count - count))
         if [ $count -lt 1 ]; then
+            led 0
             echo "Library fully populated. Sleeping for $sleep_time."
             sleep $sleep_time
             continue
         fi
+        led_blink 1
         skip_count=0
         [ -f "$list.skip" ] &&
             skip_count=$(wc -l < "$list.skip")
         while :; do
             if wget -O "$list.remote" "$remote_list"; then
+                led_blink 2
                 echo 'Filtering remote track list (1/2)...'
 	        tmp_list="$list.remote"
                 if [ $skip_count -gt 0 ]; then
@@ -45,9 +76,9 @@ while :; do
                 echo 'Filtering remote track list (2/2)...'
                 head -n $count "$tmp_list" > "$list.queue"
                 rm "$tmp_list" "$list.remote" 2> /dev/null
-                echo 'Done.'
                 break
             else
+                led_alarm
                 echo "Failed to get remote track list. Trying again in 1m."
                 sleep 60
             fi
@@ -57,22 +88,27 @@ while :; do
         c_file=$(echo "$file" | urldecode | sed 's:/: - :g' |
             tr -c '[:alnum:][:punct:] \n' '_')
         for n in 1 2 3; do
+            led_blink 1
             if [ -f "$music_dir/$c_file" ]; then
                 echo "Skipping $file."
                 echo "$file" >> "$list.skip"
                 break
-            elif wget -c -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
+            elif wget -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
                 echo "Moving $c_file to music directory."
+                led_blink 2
                 mv "$tmp_dir/$c_file" "$music_dir/"
                 echo "$file" >> "$list.skip"
                 break
             else
+                led_alarm
                 echo "Failed to download $file. Trying again in 15s."
                 sleep 15
             fi
         done
+        led 0
     done < "$list.queue"
     echo 'Done re-populating library.'
     rm "$list.queue"
+    led 1
     sleep 5
 done
