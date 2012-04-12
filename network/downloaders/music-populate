@@ -1,6 +1,6 @@
 #!/bin/sh
 ### Music Populator (Android) #####
-# Ver 20120406-1 by Scott Garrett #
+# Ver 20120412-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us #
 ###################################
 
@@ -10,9 +10,14 @@ remote_dir="$host/Music/Library"
 music_dir='/mnt/sdcard/Music'
 tmp_dir='/mnt/sdcard/.tmp'
 list="$music_dir/.list"
+wlan_state=/sys/class/net/eth0/operstate
 
 max_count=1500
-sleep_time='2h'
+tlfail_wait=60
+dlfail_wait=15
+wifi_wait=300
+rescan_wait=7200
+
 
 
 urldecode () {
@@ -35,7 +40,7 @@ led_blink () {
         led 0
         sleep $1
     done &
-    blink=$! # Derp.
+    blink=$!
 }
 
 led_alarm () {
@@ -46,7 +51,22 @@ led_alarm () {
     done
 }
 
+wlan_up () {
+    [ -f $wlan_state ] &&
+        [ "$(cat "$wlan_state")" = 'up' ]
+}
+
+wait () {
+    led 0
+    echo "$2; sleeping $1s."
+    sleep $1
+}
+
 while :; do
+    if ! wlan_up; then
+        wait $wifi_wait "Wi-Fi disconnected"
+        continue
+    fi
     mkdir -p "$music_dir" "$tmp_dir"
     if [ ! -f "$list.queue" ]; then
         led_blink 2
@@ -55,9 +75,7 @@ while :; do
             -iname "*.ogg" \) | wc -l)
         count=$((max_count - count))
         if [ $count -lt 1 ]; then
-            led 0
-            echo "Library fully populated. Sleeping for $sleep_time."
-            sleep $sleep_time
+            wait $rescan_wait "Library populated"
             continue
         fi
         led_blink 1
@@ -79,8 +97,7 @@ while :; do
                 break
             else
                 led_alarm
-                echo "Failed to get remote track list. Trying again in 1m."
-                sleep 60
+                wait $tlfail_wait "Failed to get remote track list"
             fi
         done
     fi
@@ -101,8 +118,7 @@ while :; do
                 break
             else
                 led_alarm
-                echo "Failed to download $file. Trying again in 15s."
-                sleep 15
+                wait $dlfail_wait "Failed to download $file"
             fi
         done
         led 0
