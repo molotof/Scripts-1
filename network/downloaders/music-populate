@@ -1,9 +1,10 @@
 #!/bin/sh
 ### Music Populator (Android) #####
-# Ver 20120412-1 by Scott Garrett #
+# Ver 20120412-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us #
 ###################################
 
+# Paths
 host='http://demonpit.archlinux.tk:8000'
 remote_list="$host/msync-list.php?c=ls"
 remote_dir="$host/Music/Library"
@@ -11,17 +12,34 @@ music_dir='/mnt/sdcard/Music'
 tmp_dir='/mnt/sdcard/.tmp'
 list="$music_dir/.list"
 wlan_state=/sys/class/net/eth0/operstate
+vibrator=/sys/devices/virtual/timed_output/vibrator/enable
 
+# Delay times (in seconds)
 max_count=1500
 tlfail_wait=60
 dlfail_wait=15
 wifi_wait=300
 rescan_wait=7200
 
+# Vibration times (in milliseconds)
+rescan_vibrate=250
+tldl_vibrate=250
+filter_vibrate=500
+alarm_vibrate=100
+file_vibrate=100
+move_vibrate=200
+done_vibrate=1000
 
 
+#############
+# Functions #
+#############
 urldecode () {
     echo -e "$(sed 'y/+/ /;s/%/\\x/g')"
+}
+
+vibrate () {
+    echo $1 > $vibrator
 }
 
 led () {
@@ -43,11 +61,13 @@ led_blink () {
     blink=$!
 }
 
-led_alarm () {
+alarm () {
     led 0
     for n in 1 2 3 4 5 6 7 8 9 0; do
         led 1
+        vibrate $alarm_vibrate
         led 0
+        vibrate $alarm_vibrate
     done
 }
 
@@ -57,11 +77,22 @@ wlan_up () {
 }
 
 wait () {
-    led 0
     echo "$2; sleeping $1s."
+    led 0
+    v=$(($1 * 2))
+    if [ $v -lt 1001 ]; then
+        vibrate $v
+    else
+        vibrate 1000
+    fi
     sleep $1
 }
 
+
+
+########
+# Main #
+########
 while :; do
     if ! wlan_up; then
         wait $wifi_wait "Wi-Fi disconnected"
@@ -69,8 +100,9 @@ while :; do
     fi
     mkdir -p "$music_dir" "$tmp_dir"
     if [ ! -f "$list.queue" ]; then
-        led_blink 2
         echo 'Scanning music library...'
+        led_blink 2
+        vibrate $rescan_vibrate
         count=$(find "$music_dir" -type f \( -iname "*.mp3" -o \
             -iname "*.ogg" \) | wc -l)
         count=$((max_count - count))
@@ -79,24 +111,27 @@ while :; do
             continue
         fi
         led_blink 1
+        vibrate $tldl_vibrate
         skip_count=0
         [ -f "$list.skip" ] &&
             skip_count=$(wc -l < "$list.skip")
         while :; do
             if wget -O "$list.remote" "$remote_list"; then
-                led_blink 2
                 echo 'Filtering remote track list (1/2)...'
+                led_blink 2
+                vibrate $filter_vibrate
 	        tmp_list="$list.remote"
                 if [ $skip_count -gt 0 ]; then
                     tmp_list="$list.queue~"
 	            grep -Fvf "$list.skip" "$list.remote" > "$tmp_list"
 	        fi
                 echo 'Filtering remote track list (2/2)...'
+                vibrate $filter_vibrate
                 head -n $count "$tmp_list" > "$list.queue"
                 rm "$tmp_list" "$list.remote" 2> /dev/null
                 break
             else
-                led_alarm
+                alarm
                 wait $tlfail_wait "Failed to get remote track list"
             fi
         done
@@ -106,6 +141,7 @@ while :; do
             tr -c '[:alnum:][:punct:] \n' '_')
         for n in 1 2 3; do
             led_blink 1
+            vibrate $file_vibrate
             if [ -f "$music_dir/$c_file" ]; then
                 echo "Skipping $file."
                 echo "$file" >> "$list.skip"
@@ -113,11 +149,12 @@ while :; do
             elif wget -O "$tmp_dir/$c_file" "$remote_dir/$file"; then
                 echo "Moving $c_file to music directory."
                 led_blink 2
+                vibrate $move_vibrate
                 mv "$tmp_dir/$c_file" "$music_dir/"
                 echo "$file" >> "$list.skip"
                 break
             else
-                led_alarm
+                alarm
                 wait $dlfail_wait "Failed to download $file"
             fi
         done
@@ -126,5 +163,6 @@ while :; do
     echo 'Done re-populating library.'
     rm "$list.queue"
     led 1
+    vibrate $done_vibrate
     sleep 5
 done
