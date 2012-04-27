@@ -1,6 +1,6 @@
 @echo off
 rem ### Toggle HOSTS File Entries #########
-rem # Version 20120221-1 by Scott Garrett #
+rem # Version 20120427-1 by Scott Garrett #
 rem # Wintervenom [(at)] archlinux.us     #
 rem #######################################
 
@@ -27,7 +27,7 @@ rem ### Main ###
 rem ############
 
 echo Toggle HOSTS File Entries
-echo Version 20120221-1 by Scott Garrett
+echo Version 20120427-1 by Scott Garrett
 echo Wintervenom [(at)] archlinux.us
 echo.
 

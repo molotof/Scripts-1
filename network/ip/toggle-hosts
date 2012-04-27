@@ -1,9 +1,9 @@
 #!/bin/bash
 ### Toggle HOSTS File Entries #########
-# Version 20120221-1 by Scott Garrett #
+# Version 20120427-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
-version='20120221-1'
+version='20120427-1'
 
 ###############
 ### Globals ###
