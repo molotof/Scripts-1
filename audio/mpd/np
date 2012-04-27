@@ -6,7 +6,7 @@ if [[ -z $f ]]; then
     ms=$(ping $mh -qc1 | head -1 | cut -d' ' -f3 | tr -d '()')
     if [[ $ms == '192.168.1.3' && $mh != $HOSTNAME ]]; then
         echo -n "$HOSTNAME isn't playing anything, but $mh's "
-        ssh iandrio $0
+        ssh $mh $0
         exit
     else
         echo 'MPD is not playing anything.'

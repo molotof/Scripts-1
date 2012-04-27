@@ -5,7 +5,7 @@ plugins=(
     #'http://dactyl.sourceforge.net/plugins/fix-focus-dev.js'
     'http://dactyl.sourceforge.net/plugins/http-headers-dev.js'
     #'http://dactyl.sourceforge.net/plugins/jscompletion-dev.js'
-    #'http://dactyl.sourceforge.net/plugins/noscript-dev.js'
+    'http://dactyl.sourceforge.net/plugins/noscript-dev.js'
     #'http://dactyl.sourceforge.net/plugins/smooth-scroll-dev.js'
     'http://dactyl.sourceforge.net/plugins/tab-options-dev.js'
     'http://dactyl.sourceforge.net/plugins/useragent-dev.js'

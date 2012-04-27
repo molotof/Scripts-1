@@ -14,7 +14,7 @@ set hosts=%SYSTEMROOT%\system32\drivers\etc\HOSTS
 rem Which IP should this script toggle the entries of?
 rem This will be used as a regular expression, so the
 rem octet delimiters must be escaped.
-set ip=208.43.40.120
+set ip=205.234.234.93
 
 rem What domains should point to the IP defined above?
 set tld=dreamviews.com

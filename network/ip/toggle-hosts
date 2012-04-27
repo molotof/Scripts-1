@@ -11,7 +11,7 @@ version='20120221-1'
 
 # Which IP should this script toggle the entries of?
 # If not in argument parameters, use Dreamviews' by default.
-ip="${1:-208.43.40.120}"
+ip="${1:-205.234.234.93}"
 
 # Which domains should point at the IP above?
 # If not in argument parameters, use Dreamviews' by default.
