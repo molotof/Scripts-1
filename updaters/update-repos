@@ -142,6 +142,7 @@ tree = {
             ),
             'ip': (
                 'bin/toggle-host*',
+                'bin/restore-hosts.bat',
             ),
         },
         'file': {
