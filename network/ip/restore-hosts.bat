@@ -1,6 +1,6 @@
 @echo off
 rem ### Restore HOSTS File ################
-rem # Version 20120428-1 by Scott Garrett #
+rem # Version 20120428-2 by Scott Garrett #
 rem # Wintervenom [(at)] archlinux.us     #
 rem #######################################
 rem
@@ -8,8 +8,8 @@ rem ### WHAT THIS SCRIPT DOES ###
 rem Restores your hosts file to Windows default.
 rem
 rem ### HOW TO USE THIS SCRIPT ###
-rem - (GitHub):  Right-click 'Raw' at the top-
-rem   right of this this page.
+rem - Right-click 'Raw' at the top-right of
+rem   this this page.
 rem - Save the script to your desktop.
 rem - If you use Windows Vista or 7:
 rem   Right-click and 'Run as Administrator.'
@@ -32,7 +32,7 @@ rem ### Main ###
 rem ############
 
 echo Restore HOSTS File
-echo Version 20120428-1 by Scott Garrett
+echo Version 20120428-2 by Scott Garrett
 echo Wintervenom [(at)] archlinux.us
 echo.
 
