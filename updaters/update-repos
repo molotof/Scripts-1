@@ -73,7 +73,7 @@ tree = {
         },
         'text': {
             'vim': (
-                '.config/.vimrc',
+                '.vimrc',
             ),
             'zathura': (
                 '.config/zathura/zathurarc',
