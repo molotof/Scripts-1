@@ -22,7 +22,7 @@ log_path="/mnt/ssh/diadian/.logs/irc/$(date +'%Y/%m/%d')/%s.%s.weechatlog"
 backup="backup.relevant-track"
 channels=(
     #'freenode ##<3 #archlinux-offtopic'
-    'dreamviews #dv'
+    'dreamviews #dv #luciddreaming'
 )
 swap_words=(
     'this that that this'
