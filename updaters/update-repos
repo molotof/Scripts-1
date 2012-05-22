@@ -256,10 +256,10 @@ tree = {
                 'bin/dwm-session',
                 'bin/dwm-update',
             ),
+            'herbstluftwm': (
+                'bin/hlwm-*',
+            ),
         },
-        'herbstluftwm': (
-            'bin/hlwm-*',
-        ),
     },
 }
 
