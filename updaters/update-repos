@@ -103,6 +103,9 @@ tree = {
             'i3': (
                 '.config/i3/config',
             ),
+            'screen': (
+                '.screenrc',
+            ),
         },
         'x11': (
             '.xbindkeysrc',
