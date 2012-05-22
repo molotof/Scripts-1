@@ -43,6 +43,7 @@ status () {
                 read -d' ' load < /proc/loadavg
                 mem=$(free -h | awk '/cache:/{print $3}')
                 batt=$(acpi -b | cut -d' ' -f4)
+                temp=$(acpi -t | cut -d' ' -f4)
                 clock=$(date +'%a %m%d:%H%M')
                 ;;
             reload|quit_panel)
@@ -50,7 +51,7 @@ status () {
                 exit
                 ;;
         esac
-        echo " $tags $window_title ^p(_RIGHT)^p(-330)Load: $load   Mem: $mem   Batt: $batt^p(_RIGHT)^p(-90)$clock"
+        echo " $tags $window_title ^p(_RIGHT)^p(-400)Load: $load   Temp: $temp   Mem: $mem   Batt: $batt^p(_RIGHT)^p(-90)$clock"
     done < <($hc -i \
         '(focus|window_title|tag)_changed|update_info|reload|quit_panel')
 }
