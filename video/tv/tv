@@ -9,7 +9,13 @@ cache=2
 restarts=0
 ts='[%d-%a-%y %H%M.%S]'
 lock='/tmp/tv.lock'
-DISPLAY=:0.0
+DISPLAY=${DISPLAY:-:0.0}
+oldres=$(xrandr -d $DISPLAY -q |
+    awk -F'current' -F',' 'NR==1 {gsub("( |current)","");print $2}')
+oldres=${oldres:-1280x800}
+output=$(xrandr -d $DISPLAY | awk '/ connected /{print $1;exit}')
+output=${output:-LVDS1}
+
 
 if [[ "$1" =~ ^-p ]]; then
     prog=$1
@@ -39,6 +45,9 @@ for s in INT TERM USR1; do
     trap "rm '$lock'; exit" INT
 done
 while :; do
+    for r in {720,640}x480; do
+        hlwm-xrandr $r && break
+    done
     $c -display :0.0 -tsprog "$prog" -cache 100000 -msglevel all=5 -nomsgcolor "dvb://$channel" 2>&1 | while read line; do
         date +"$ts $line"
         case "$line" in
@@ -57,6 +66,7 @@ while :; do
                 ;;
         esac
     done
+    hlwm-xrandr $oldres
     killall -w mplayer
     [[ ! -f "$lock" ]] && break
 done

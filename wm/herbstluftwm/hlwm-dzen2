@@ -12,6 +12,7 @@ dzen=(
     dzen2 -ta l -sa l
     -bg "$($hc get frame_bg_normal_color)"
     -fg "$($hc get frame_bg_active_color)"
+    -fn "-*-fixed-medium-r-*-*-11-*-*-*-*-*-iso10646-1"
     -e "button3=togglehide;button5=exec:$hc use_index -1;button4=exec:$hc use_index +1"
 )
 declare -A tag_colors=(

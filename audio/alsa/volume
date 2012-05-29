@@ -7,7 +7,7 @@ if [[ "$2" ]]; then
     c=$1
     shift
 else
-    c='Master'
+    c='PCM'
 fi
 current=$(amixer -c0 get "$c" | tail -1 | grep -o '[0-9]\+%' | tr -d '%')
 mute="/tmp/.$USER-$c-mute"
