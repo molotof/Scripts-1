@@ -8,8 +8,8 @@ if [[ -z $1 ]]; then
     set -- ${res:-1280x800}
 fi
 if xrandr -d $DISPLAY --output $output --mode $1; then
-    type -p herbstclient >/dev/null &&
-        herbstclient set_monitors $1+0+0 &>/dev/null
+    type -p herbstclient >/dev/null && herbstclient reload &>/dev/null
+    . ~/.fehbg
     exit 0
 fi
 exit 1

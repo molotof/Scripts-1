@@ -1,15 +1,18 @@
 #!/bin/bash
 basename=${0##*/}
 plugins=(
-http://www.weechat.org/files/scripts/beep.pl
-http://www.weechat.org/files/scripts/buffer_autoclose.py
-http://www.weechat.org/files/scripts/grep.py
-http://www.weechat.org/files/scripts/highmon.pl
-http://www.weechat.org/files/scripts/nickregain.pl
-http://www.weechat.org/files/scripts/screen_away.py
-http://www.weechat.org/files/scripts/shell.py
-http://www.weechat.org/files/scripts/urlgrab.py
-http://www.weechat.org/files/scripts/toggle_nicklist.py
+http://weechat.org/files/scripts/beep.pl
+http://weechat.org/files/scripts/buffer_autoclose.py
+http://weechat.org/files/scripts/grep.py
+http://weechat.org/files/scripts/highmon.pl
+http://weechat.org/files/scripts/nickregain.pl
+http://weechat.org/files/scripts/screen_away.py
+http://weechat.org/files/scripts/shell.py
+http://weechat.org/files/scripts/urlgrab.py
+http://weechat.org/files/scripts/buffers.pl
+http://weechat.org/files/scripts/buffer_swap.py
+http://weechat.org/files/scripts/go.py
+http://weechat.org/files/scripts/iset.pl
 )
 
 for plugin in ${plugins[@]}; do
