@@ -48,7 +48,7 @@ exit_delay=1
 #################
 volume () {
     # Smoothly transition system volume.
-    command volume Master $1 $volknob_speed
+    command volume PCM $1 $volknob_speed
 }
 
 play () {
