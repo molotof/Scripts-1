@@ -1,7 +1,7 @@
 #!/bin/bash
 library="${HOME}/Music/Library"
 playlists="${HOME}/Music/Playlists"
-trash="${HOME}/.local/Trash"
+trash="${HOME}/.local/share/Trash"
 song=$(mpc current -f '%file%')
 error () {
     echo "${*}"

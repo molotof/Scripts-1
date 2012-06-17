@@ -3,29 +3,33 @@ basename=${0##*/}
 plugins=(
 http://weechat.org/files/scripts/beep.pl
 http://weechat.org/files/scripts/buffer_autoclose.py
+http://weechat.org/files/scripts/buffers.pl
+http://weechat.org/files/scripts/filter_ext.pl
+http://weechat.org/files/scripts/go.py
 http://weechat.org/files/scripts/grep.py
 http://weechat.org/files/scripts/highmon.pl
-http://weechat.org/files/scripts/nickregain.pl
-http://weechat.org/files/scripts/screen_away.py
-http://weechat.org/files/scripts/shell.py
-http://weechat.org/files/scripts/urlgrab.py
-http://weechat.org/files/scripts/buffers.pl
-http://weechat.org/files/scripts/buffer_swap.py
-http://weechat.org/files/scripts/go.py
 http://weechat.org/files/scripts/iset.pl
+http://weechat.org/files/scripts/listbuffer.py
+http://weechat.org/files/scripts/shell.py
+http://weechat.org/files/scripts/text_replace.py
+http://weechat.org/files/scripts/title.py
+http://weechat.org/files/scripts/topicsed.pl
+http://weechat.org/files/scripts/unofficial/znc-playback.py
+http://weechat.org/files/scripts/unset_unused.pl
+http://weechat.org/files/scripts/urlgrab.py
+https://github.com/torque/buff_asort/raw/master/buff_asort.rb
+http://weechat.org/files/scripts/cron.py
 )
-
+declare -A plang=(
+    [py]=python
+    [pl]=perl
+    [rb]=ruby
+    [lua]=lua
+)
 for plugin in ${plugins[@]}; do
-    case "${plugin##*.}" in
-        'py')
-            plang='python' ;;
-        'pl')
-            plang='perl'   ;;
-        'lua')
-            plang='lua'    ;;
-    esac
-    if [[ ${plang} ]]; then
-        wget -t3 -T10 -w5 -O "${HOME}/.weechat/${plang}/autoload/${plugin##*/}" "${plugin}"
+    lang=${plang["${plugin##*.}"]}
+    if [[ $lang ]]; then
+        wget -c -t3 -T10 -w5 -O "${HOME}/.weechat/$lang/autoload/${plugin##*/}" "${plugin}"
     else
         echo "${basename}: Plugin '${plugin}' is not supported."
     fi

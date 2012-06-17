@@ -42,7 +42,7 @@ fi
 
 touch "$lock"
 for s in INT TERM USR1; do
-    trap "rm '$lock'; exit" INT
+    trap "hlwm $oldres; rm '$lock'; exit" $s
 done
 while :; do
     for r in {720,640}x480; do
