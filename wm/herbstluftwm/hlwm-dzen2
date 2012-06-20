@@ -48,7 +48,7 @@ status () {
                 clock=$(date +'%a %m%d:%H%M')
                 ;;
             reload|quit_panel)
-                kill $ping_pid
+                kill $(jobs -pr) 2>/dev/null
                 exit
                 ;;
         esac
@@ -67,7 +67,7 @@ status () {
     done
 } &
 ping_pid=$!
-trap "kill $ping_pid" INT TERM HUP
+trap 'kill $(jobs -pr) 2>/dev/null' INT TERM HUP
 
 #killall trayer 2> /dev/null
 #trayer --edge top --align left --tint "${colors[0]//#/0x}" --alpha 0 --transparent true --height 14 --width 5 --widthtype percent &

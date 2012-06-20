@@ -147,6 +147,9 @@ tree = {
                 'bin/toggle-host*',
                 'bin/restore-hosts.bat',
             ),
+            'diagnostics': (
+                'bin/speedtest',
+            ),
         },
         'file': {
             'backup': (

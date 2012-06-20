@@ -1,0 +1,23 @@
+#!/bin/bash
+### Basic Network Speed Test ########
+# Version 20120619 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us   #
+#####################################
+# Dependencies:
+#   - socat (on both machines)
+
+stderr () { echo "$*" >&2; }
+fatal () { stderr "$*"; exit 1; }
+cleanup () { kill $(jobs -pr) 2>/dev/null; }
+
+[[ -z $1 ]] && fatal "Syntax: ${0##*/} hostname"
+stderr "Starting socat pipe on $1..."
+ssh $1 socat -u -lf /tmp/socat.log /dev/zero TCP4-LISTEN:65500 &>/dev/null &
+sleep 5
+remote_socat=$!
+[[ -z $remote_socat ]] && fatal "Could not start socat on $1."
+trap cleanup INT HUP TERM
+stderr 'Running test...'
+socat -u -lf /tmp/socat.log TCP4:$1:65500 STDOUT |
+    dd of=/dev/null iflag=fullblock bs=1M count=100 2>&1 | tail -1
+cleanup
