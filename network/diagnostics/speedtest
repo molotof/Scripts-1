@@ -1,5 +1,5 @@
 #!/bin/bash
-### Basic Network Speed Test ########
+### Socat Host-to-Host Speed Test ###
 # Version 20120619 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us   #
 #####################################
