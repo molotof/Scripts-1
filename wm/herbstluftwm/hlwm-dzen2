@@ -101,9 +101,8 @@ $hc -i "$hooks" >&9 &
     while :; do
         if (($(date +%S) % interval != 0)); then
             update_stats 'Sync'
-            until (($(date +%S) % 10 == 0)); do
-                sleep 0.5
-            done
+            ((delay = interval - $(date +%S) % interval - 1))
+            ((delay >= 0)) && sleep $delay.7
         fi
         update_stats &
         sleep $interval
