@@ -4,7 +4,7 @@ output=$(xrandr -d $DISPLAY | awk '/ connected /{print $1;exit}')
 output=${output:-LVDS1}
 if [[ -z $1 ]]; then
     xrandr -d $DISPLAY -s 0 || exit 1
-    res=$(xrandr -d $DISPLAY -q | awk -F'current' -F',' 'NR==1 {gsub("( |current)","");print $2}' | tr -d i)
+    res=$(xrandr -d $DISPLAY -q | awk -F'current' -F',' 'NR==1 {gsub("( |current)","");print $2}')
     set -- ${res:-1280x800}
 fi
 if xrandr -d $DISPLAY --output $output --mode $1; then

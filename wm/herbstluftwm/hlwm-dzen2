@@ -1,24 +1,39 @@
 #!/bin/bash
 ### Herbstluftwm Dzen2 Status #########
-# Version 20120520-1 by Scott Garrett #
+# Version 20120627-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 
 set -f
 
+## Globals ##
+show=(load:L mem:M batt:B temp:T clock)
+sep=':'
+date_fmt='%a %m%d:%H%M'
+interval=15
+
 hc='herbstclient'
-colors=($(awk '/^\*color/{print $2}' .Xdefaults))
-dzen=(
-    dzen2 -ta l -sa l
-    -bg "$($hc get frame_bg_normal_color)"
-    -fg "$($hc get frame_bg_active_color)"
-    -fn "-*-fixed-medium-r-*-*-11-*-*-*-*-*-iso10646-1"
-    -e "button3=togglehide;button5=exec:$hc use_index -1;button4=exec:$hc use_index +1"
-)
 declare -A tag_colors=(
     [':']=$($hc get frame_border_active_color)
     ['#']=$($hc get window_border_active_color)
 )
+dzen=(
+    dzen2 -ta l -sa l
+    -bg black #"$($hc get frame_bg_normal_color)"
+    -fg "$($hc get frame_bg_active_color)"
+    -fn "Ubuntu Mono-8"
+    -e "button3=togglehide;button5=exec:$hc use_index -1;button4=exec:$hc use_index +1"
+)
+
+
+## Functions ##
+cleanup () {
+    exec 9<&-
+    rm "$io" 2>/dev/null
+    kill $(jobs -p) 2>/dev/null
+    wait
+    exit
+}
 
 get_tags () {
     for t in $($hc tag_status); do
@@ -28,11 +43,74 @@ get_tags () {
     echo
 }
 
-status () {
-    window_id=0
-    window_title='(Waiting...)'
-    tags=$(get_tags)
-    while IFS=$'\t' read hook p1 p2; do
+update_stats () {
+    local k s stats IFS=':'
+    for k in "${show[@]}"; do
+        k=($k)
+        if type -t "status-$k" >/dev/null; then
+            IFS=$oifs
+            s=$("status-$k")
+        else
+            case "$k" in
+                load)
+                    read -d' ' s < /proc/loadavg ;;
+                mem)
+                    s=$(free -h | awk '/cache:/{print $3}') ;;
+                batt)
+                    s=$(acpi -b | cut -d' ' -f4) ;;
+                temp)
+                    s=$(acpi -t | cut -d' ' -f4) ;;
+                clock)
+                    s=$(date "+$date_fmt") ;;
+                *)
+                    continue ;;
+            esac
+        fi
+        [[ ${k[1]} ]] && s="${k[1]}$sep$s"
+        stats+="   $s"
+    done
+    [[ $1 ]] && stats="($1) $stats"
+    echo $'update_stats\t'"$stats" >&9
+}
+
+
+## Main ##
+conf_dir="$HOME/.config/hlwm-dzen2"
+io="$conf_dir/io"
+hooks='(focus|window_title|tag)_changed|update_stats|reload|quit_panel'
+
+window_id=0
+tags=$(get_tags)
+oifs=$IFS
+
+mkdir -p "$conf_dir/scripts"
+[[ -f "$conf_dir/config" ]] && . "$conf_dir/config"
+while read -r file; do
+    . "$file"
+done < <(find "$conf_dir/scripts" -maxdepth 1 -type f \
+    -not -iregex ".*.\(swp\|tmp\|bak\|old\)\|~.*" | sort -u)
+
+trap cleanup INT TERM HUP
+
+rm "$io" 2>/dev/null
+mkfifo "$io"
+exec 9<&-
+exec 9<>"$io"
+$hc -i "$hooks" >&9 &
+(
+    while :; do
+        if (($(date +%S) % interval != 0)); then
+            update_stats 'Sync'
+            until (($(date +%S) % 10 == 0)); do
+                sleep 0.5
+            done
+        fi
+        update_stats &
+        sleep $interval
+    done
+) >&9 &
+while IFS=$'\t' read -r hook p1 p2; do
+    if [[ $hook ]]; then
         case "$hook" in
             tag_changed)
                 tags=$(get_tags) ;;
@@ -40,36 +118,13 @@ status () {
                 window_id=$p1 window_title=$p2 ;;
             window_title_changed)
                 [[ $p1 == $window_id ]] && window_title=$p2 ;;
-            update_info)
-                read -d' ' load < /proc/loadavg
-                mem=$(free -h | awk '/cache:/{print $3}')
-                batt=$(acpi -b | cut -d' ' -f4)
-                temp=$(acpi -t | cut -d' ' -f4)
-                clock=$(date +'%a %m%d:%H%M')
-                ;;
+            update_stats)
+                stats=$p1
+                stats="^p(_RIGHT)^p(-$((6 + ${#stats} * 6)))$stats" ;;
             reload|quit_panel)
-                kill $(jobs -pr) 2>/dev/null
-                exit
-                ;;
+                break ;;
         esac
-        echo " $tags $window_title ^p(_RIGHT)^p(-400)Load: $load   Temp: $temp   Mem: $mem   Batt: $batt^p(_RIGHT)^p(-90)$clock"
-    done < <($hc -i \
-        '(focus|window_title|tag)_changed|update_info|reload|quit_panel')
-}
-
-{
-    sleep 1
-    $hc use_index +1
-    $hc use_index -1
-    while :; do
-        $hc emit_hook update_info
-        sleep 5
-    done
-} &
-ping_pid=$!
-trap 'kill $(jobs -pr) 2>/dev/null' INT TERM HUP
-
-#killall trayer 2> /dev/null
-#trayer --edge top --align left --tint "${colors[0]//#/0x}" --alpha 0 --transparent true --height 14 --width 5 --widthtype percent &
-
-status | "${dzen[@]}"
+    fi
+    echo " $tags $window_title $stats"
+done <&9 | "${dzen[@]}"
+cleanup

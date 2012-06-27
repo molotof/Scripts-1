@@ -9,46 +9,9 @@ cache=2
 restarts=0
 ts='[%d-%a-%y %H%M.%S]'
 lock='/tmp/tv.lock'
-DISPLAY=${DISPLAY:-:0.0}
-oldres=$(xrandr -d $DISPLAY -q |
-    awk -F'current' -F',' 'NR==1 {gsub("( |current)","");print $2}')
-oldres=${oldres:-1280x800}
-output=$(xrandr -d $DISPLAY | awk '/ connected /{print $1;exit}')
-output=${output:-LVDS1}
 
-
-if [[ "$1" =~ ^-p ]]; then
-    prog=$1
-    prog=${prog:2}
-    shift
-fi
-
-channel=$(egrep -m1 -i "(^|:)$*($|:)" "$chans" | cut -d':' -f1)
-[[ -z "$channel" ]] && channel=$(egrep -m1 -i "$*" "$chans" | cut -d':' -f1)
-if [[ -z "$channel" ]]; then
-    echo 'Channel not found.'
-    exit 1
-fi
-
-trap "" USR1
-killall -w mplayer
-killall -USR1 ${0##*/}
-
-if $(echo "$channel" | grep -qi ' hd'); then
-    c="mplayer -cache-min $cache -lavdopts skipframe=nonref:skiploopfilter=all:fast=1:threads=2"
-else
-    c="mplayer -cache-min 0.$cache -lavdopts threads=2 -vf yadif=1"
-fi
-
-touch "$lock"
-for s in INT TERM USR1; do
-    trap "hlwm $oldres; rm '$lock'; exit" $s
-done
-while :; do
-    for r in {720,640}x480; do
-        hlwm-xrandr $r && break
-    done
-    $c -display :0.0 -tsprog "$prog" -cache 100000 -msglevel all=5 -nomsgcolor "dvb://$channel" 2>&1 | while read line; do
+read_line () {
+    while read -r line; do
         date +"$ts $line"
         case "$line" in
             *'Exiting'*)
@@ -66,8 +29,38 @@ while :; do
                 ;;
         esac
     done
-    hlwm-xrandr $oldres
     killall -w mplayer
+}
+
+while getopts p: opt; do
+    case "$opt" in
+        p) prog=$OPTARG ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+channel=$(grep -E -m1 -i "(^|:)$*($|:)" "$chans" | cut -d':' -f1)
+[[ -z "$channel" ]] && channel=$(grep -E -m1 -i "$*" "$chans" | cut -d':' -f1)
+if [[ -z "$channel" ]]; then
+    echo 'Channel not found.'
+    exit 1
+fi
+
+trap "" USR1
+killall -w mplayer
+killall -USR1 ${0##*/}
+
+c="mplayer -cache-min 0.$cache -lavdopts threads=2 -vf yadif=1"
+grep -qi ' hd' <<< "$channel" &&
+    c="mplayer -cache-min $cache -lavdopts skipframe=nonref:skiploopfilter=all:fast=1:threads=2"
+
+touch "$lock"
+trap "rm '$lock'; exit" INT TERM USR1
+
+mpc pause 2>/dev/null
+while :; do
+    $c -display :0.0 -tsprog "$prog" -cache 100000 -msglevel all=5 \
+        -nomsgcolor "dvb://$channel" 2>&1 > >(read_line)
     [[ ! -f "$lock" ]] && break
 done
 [[ $o ]] && kill $o &> /dev/null
