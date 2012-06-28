@@ -6,6 +6,6 @@ mpc del 0
 mkdir -p "${trash}"
 mv "${library}/${song}" "${trash}"
 mpc update
-song=${song##*/}
-[[ ${#song} -gt 20 ]] && song="${song:0:20}..."
-notice "${song}\nmoved to trash."
+song=${song##*/} song=${song%.*}
+[[ ${#song} -gt 40 ]] && song="${song:0:40}..."
+notice "$song\nmoved to trash."

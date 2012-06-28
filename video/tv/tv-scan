@@ -1,29 +1,25 @@
 #!/bin/bash
 tmp="/tmp/channels.conf.new"
-target="$HOME/.mplayer/channels.conf.new"
-tuning="$HOME/.mplayer/suddenlink-transports"
+target="$HOME/.mplayer/channels.conf"
 names="$HOME/.mplayer/suddenlink-channels"
-dups=0
+blacklist="$HOME/.mplayer/suddenlink-blacklist"
 if [[ -z "$1" ]]; then
-    if ! [[ -e "$tuning" ]]; then
-        mkdir -p "${tuning%/*}"
-        w_scan -fa -A2 -c US -E0 -t2 -RO -E0 -x >> "$tuning"
-    fi
-    scan -t1 -A2 -x0 -t1 "$tuning" > "$tmp"
+    w_scan -fa -c US -A3 -M -R0 -O0 -E0 -t2 > "$tmp"
+elif [[ ! -f "$1" ]]; then
+    echo "No such file or invalid."
+    exit 1
 else
-    if [[ ! -f "$1" ]]; then
-        echo "No such file or invalid."
-        exit 1
-    fi
     cp "$1" "$tmp"
 fi
-if ! [[ -e "$names" ]]; then
+if ! [[ -f "$names" ]]; then
     mkdir -p "${names%/*}"
     touch "$names"
 fi
-while read channel; do
+[[ ! -f "$blacklist" ]] && touch "$blacklist"
+while read -r channel; do
     sed -r -i "s/[^:]+(.*:.*:${channel#*:})$/${channel%:*}\1/" "$tmp"
 done < "$names"
 sed -r -i 's/\[|\]//g' "$tmp"
 sed -r -i 's/^ *(.*) *:/\1:/g' "$tmp"
-sort -n -k6 -t':' "$tmp" > "$target"
+grep -Evf "$blacklist" "$tmp" | sort -n -k6 -t':' > "$target"
+rm "$tmp"
