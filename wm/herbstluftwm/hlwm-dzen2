@@ -1,15 +1,15 @@
 #!/bin/bash
 ### Herbstluftwm Dzen2 Status #########
-# Version 20120627-2 by Scott Garrett #
+# Version 20120701-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 
 set -f
 
 ## Globals ##
-show=(load:L mem:M batt:B temp:T clock)
+show=(load:L mem:M batt:B temp:T)
 sep=':'
-date_fmt='%a %m%d:%H%M'
+date_fmt='   %a %m%d:%H%M.%S'
 interval=15
 
 hc='herbstclient'
@@ -60,8 +60,6 @@ update_stats () {
                     s=$(acpi -b | cut -d' ' -f4) ;;
                 temp)
                     s=$(acpi -t | cut -d' ' -f4) ;;
-                clock)
-                    s=$(date "+$date_fmt") ;;
                 *)
                     continue ;;
             esac
@@ -98,19 +96,19 @@ exec 9<&-
 exec 9<>"$io"
 $hc -i "$hooks" >&9 &
 (
+    echo clock
+    update_stats
     while :; do
-        if (($(date +%S) % interval != 0)); then
-            update_stats 'S'
-            ((delay = interval - $(date +%S) % interval))
-            sleep $delay
-        fi
-        update_stats &
-        sleep $interval
+        echo clock
+        ((SECONDS % interval == 0)) && { update_stats & }
+        sleep 1
     done
 ) >&9 &
 while IFS=$'\t' read -r hook p1 p2; do
     if [[ $hook ]]; then
         case "$hook" in
+            clock)
+                clock=$(date "+$date_fmt") ;;
             tag_changed)
                 tags=$(get_tags) ;;
             focus_changed)
@@ -119,11 +117,13 @@ while IFS=$'\t' read -r hook p1 p2; do
                 [[ $p1 == $window_id ]] && window_title=$p2 ;;
             update_stats)
                 stats=$p1
-                stats="^p(_RIGHT)^p(-$((6 + ${#stats} * 6)))$stats" ;;
+                ((p = 6 + (${#stats} + ${#clock}) * 6))
+                stats="^p(_RIGHT)^p(-$p)$stats"
+                ;;
             reload|quit_panel)
                 break ;;
         esac
     fi
-    echo " $tags $window_title $stats"
+    echo " $tags $window_title $stats$clock"
 done <&9 | "${dzen[@]}"
 cleanup
