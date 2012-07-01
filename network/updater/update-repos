@@ -1,59 +1,114 @@
 #!/bin/bash
-### Repository Updater #############
+### GIT Repository Updater #########
 # Ver. 20120630-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us  #
 ####################################
 
+# Get rid of conflicting functions in our environment.
 for f in $(compgen -A function repo-); do
     unset $f
 done
+unset tree
 
+# Defaults.
 config="$HOME/.config/update-repos"
 changelog='.changes'
 msg_prefix="[Auto Update]"
 msg=${*:-'(No comment)'}
 
+# Unset all the shell options and set only the ones we want.
 shopt -u $(shopt | cut -f1)
 shopt -s extquote extglob globstar force_fignore sourcepath
+# Prepend GIT commit message prefix, if set.
 [[ $msg_prefix ]] && msg="$msg_prefix $msg"
 IFS=$'\n'
 
+echo 'GIT Repository Updater - version 20120630-1 by Scott Garrett'
+echo 'Wintervenom [(at)] archlinux.us'
+echo
+
+# Create configuration, if necessary.
 mkdir -p "$config"
-[[ -f "$config/config" ]] && . "$config/config"
+if [[ ! -f "$config/config" ]]; then
+    cat >"$config/config" <<'EOF'
+# Where will the GIT repos be kept?
+# root="$HOME/repos"
+#
+#repo-GIT_repo_name_here () {
+#    tree=(
+#    ['path in repo']='files to put in path|redaction regex'
+#    )
+#}
+#
+#repo-Example () {
+#    tree=(
+#    ['directory']='file'
+#    ['foo/bar']='crapshi.rc'
+#    ['my_thing']='some-config-file|(redact_this_password_key =).*'
+#    ['stuff']='crap/{item,thong,bluh-*}'
+#    )
+#}
+EOF
+    echo "Please edit $config/config before using."
+    exit 1
+fi
+# Load configuration.
+. "$config/config"
 
 if [[ -z $root ]]; then
-    echo 'No root= directory set in configuration.'
-    echo "Please edit $config."
+    echo "No root= directory set in $config/config."
     exit 1
 fi
 
 for repo in $(compgen -A function repo-); do
+    # Make sure we're in home directory so relative file sources work.
     cd "$HOME"
-    repo_root="$root/${repo#*-}"
+    # Name of GIT repository ('repo-' prefix removed).
+    r=${repo#*-}
+    # Path to repository.
+    repo_root="$root/$r"
+    # Initialize file tree assoc. array and popuate it from repo- function.
     declare -A tree=
     $repo
+    # Skip if the array is still empty.
+    if [[ -z ${#tree[@]} ]]; then
+        echo "$r: no tree defined; skipping."
+        continue
+    fi
+    # Delete the contents of the repository except .git and changelog.
     echo "$r: deleting old tree..."
     mkdir -p "$repo_root"
     find "$repo_root"/* -maxdepth 1 -not -regex "\.(git.*|$changelog)" \
         -print0 | xargs -0 rm -rf
+    # Repopulate the repository with files defined in the array.
     echo "$r: copying new tree..."
     for target in "${!tree[@]}"; do
+        # Split the redaction regex from the file list string.
         read -rd'|' files redact <<< "${tree["$target"]}"
         target="$repo_root/$target"
         if [[ -z $redact ]]; then
+            # If we don't have to redact stuff from files, just copy the
+            # files into the defined path in the repo.
             mkdir -p "$target"
             cp -at "$target" $(eval "printf -- '%s\n' $files")
         else
+            # Otherwise, copy them into a temporary directory...
             echo "    redacting: $redact"
             mkdir -p "$target.redact"
             cp -at "$target.redact" $(eval "printf -- '%s\n' $files")
+            # ...do the redactions on all the files copied...
             find "$target.redact" -type f -print0 |
                 xargs -0 sed -ri "s/$redact/\1[redacted]/"
+            # ...then copy the changed files over the original target.
+            # (Unfortunately, 'mv' can't merge directories, so we'll copy.)
             cp -at "$target" "$target.redact/"{*,.*}
+            # Delete the temporary directory
             rm -rf "$target.redact"
         fi
     done
+    # If there's no .git directory in the repo, don't try to...
     [[ ! -d "$repo_root/.git" ]] && continue
+    # ...auto-commit and push the repository.
     cd "$repo_root"
     git add . || continue
     if [[ -f $changelog ]]; then
@@ -64,3 +119,8 @@ for repo in $(compgen -A function repo-); do
     fi
     git push origin master
 done
+
+if [[ -z $r ]]; then
+    echo "No repos defined in $config/config."
+    exit 1
+fi
