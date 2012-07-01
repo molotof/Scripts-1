@@ -1,0 +1,66 @@
+#!/bin/bash
+### Repository Updater #############
+# Ver. 20120630-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us  #
+####################################
+
+for f in $(compgen -A function repo-); do
+    unset $f
+done
+
+config="$HOME/.config/update-repos"
+changelog='.changes'
+msg_prefix="[Auto Update]"
+msg=${*:-'(No comment)'}
+
+shopt -u $(shopt | cut -f1)
+shopt -s extquote extglob globstar force_fignore sourcepath
+[[ $msg_prefix ]] && msg="$msg_prefix $msg"
+IFS=$'\n'
+
+mkdir -p "$config"
+[[ -f "$config/config" ]] && . "$config/config"
+
+if [[ -z $root ]]; then
+    echo 'No root= directory set in configuration.'
+    echo "Please edit $config."
+    exit 1
+fi
+
+for repo in $(compgen -A function repo-); do
+    cd "$HOME"
+    repo_root="$root/${repo#*-}"
+    declare -A tree=
+    $repo
+    echo "$r: deleting old tree..."
+    mkdir -p "$repo_root"
+    find "$repo_root"/* -maxdepth 1 -not -regex "\.(git.*|$changelog)" \
+        -print0 | xargs -0 rm -rf
+    echo "$r: copying new tree..."
+    for target in "${!tree[@]}"; do
+        read -rd'|' files redact <<< "${tree["$target"]}"
+        target="$repo_root/$target"
+        if [[ -z $redact ]]; then
+            mkdir -p "$target"
+            cp -at "$target" $(eval "printf -- '%s\n' $files")
+        else
+            echo "    redacting: $redact"
+            mkdir -p "$target.redact"
+            cp -at "$target.redact" $(eval "printf -- '%s\n' $files")
+            find "$target.redact" -type f -print0 |
+                xargs -0 sed -ri "s/$redact/\1[redacted]/"
+            cp -at "$target" "$target.redact/"{*,.*}
+            rm -rf "$target.redact"
+        fi
+    done
+    [[ ! -d "$repo_root/.git" ]] && continue
+    cd "$repo_root"
+    git add . || continue
+    if [[ -f $changelog ]]; then
+        git commit -a -m "$(<$changelog)"
+        rm -f "$changelog"
+    else
+        git commit -a -m "$msg"
+    fi
+    git push origin master
+done

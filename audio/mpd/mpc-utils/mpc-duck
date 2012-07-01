@@ -1,0 +1,33 @@
+#!/bin/bash
+### MPC Volume Ducking ################
+# Version 20120630-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+
+m () {
+    mpc volume $p &>/dev/null
+    sleep 0.01
+}
+
+t="/tmp/mpc-duck-$USER"
+v=${1//[^[:digit:]]/}
+if [[ -z $v && -f "$t" ]]; then
+    cv=$(mpc volume | tr -dc '[[:digit:]]')
+    ov=$(<"$t")
+    for ((p=cv; p<=ov; p++)); do
+        m
+    done
+    rm -f "$t"
+    exit 0
+fi
+cv=$(mpc volume | tr -dc '[[:digit:]]')
+if ((v < cv)); then
+    [[ ! -f "$t" ]] && echo $cv > "$t"
+    for ((p=cv; p>=v; p--)); do
+        m
+    done
+else
+    for ((p=cv; p<=v; p++)); do
+        m
+    done
+fi

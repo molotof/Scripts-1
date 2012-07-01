@@ -1,0 +1,14 @@
+#!/bin/bash
+t="/tmp/speak-queue-$USER"
+echo $PPID >> "$t"
+while [[ -f "$t" ]]; do
+    c=$(head -1 "$t")
+    [[ $c == $PPID ]] && break
+    sleep 2
+done
+mpc-duck 15
+((RANDOM % 2 == 0)) && v="-v mb-us$((1 + RANDOM % 3))"
+espeak -a 100 -p 50 -s 160 $v "$@" 2>/dev/null
+mpc-duck
+tail -n+2 > "$t.new"
+mv "$t.new" "$t"
