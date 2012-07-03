@@ -1,0 +1,17 @@
+#!/bin/sh
+conf=/home/wintervenom/.config/openvpn/azilink.conf
+[ $UID != 0 ] &&
+    exec sudo $0
+echo "Disconnecting from existing network(s)."
+{
+    /etc/rc.d/network stop
+    netcfg -a
+    dhcpcd -kx
+    netcfg wired
+} 2>/dev/null
+echo 'Starting port forward...'
+adb forward tcp:41927 tcp:41927 || exit 1
+echo 'Configuring nameserver...'
+echo 'nameserver 192.168.56.1' > /etc/resolv.conf
+echo 'Starting OpenVPN...'
+openvpn --script-security 2 --config "$conf"
