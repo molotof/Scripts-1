@@ -1,6 +1,6 @@
 #!/bin/bash
 ### Automatic ALSA Loopback to JACK ###
-# Version 20120710-1 by Scott Garrett #
+# Version 20120711-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 
@@ -14,7 +14,7 @@ declare -A loop_c_params=()
 IFS=$' :\t\n'
 
 get_hw_params () {
-    local param value
+    local param value trash
     loop_c_params=()
     while read -r param value trash; do
         [[ $value ]] && loop_c_params["$param"]=$value
