@@ -1,4 +1,9 @@
 #!/bin/bash
+### MPlayer: JACK/v4l2 Loopback #######
+# Version 20120711-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+
 while getopts d:a opt; do
     declare "opt_$opt"="${OPTARG:-0}"
 done

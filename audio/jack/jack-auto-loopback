@@ -28,14 +28,14 @@ cleanup () {
 }
 
 trap 'cleanup; exit 0' INT HUP TERM
-echo "Watching $loop_c_dev capture."
+echo "Watching $loop_c_dev capture"
 cleanup
 unset bridge_up
 while :; do
     read param value <"$loop_c_proc/status"
     if [[ $value == 'RUNNING' ]]; then
         if [[ -z $bridge_up ]]; then
-            echo "$loop_c_dev capture opened."
+            echo "$loop_c_dev capture opened"
             get_hw_params
             ao_opts=(
                 -j "$client_name"
@@ -52,7 +52,7 @@ while :; do
         fi
     else
         if [[ $bridge_up ]]; then
-            echo "$loop_c_dev capture closed; stopping bridge."
+            echo "$loop_c_dev capture closed; stopping bridge"
             cleanup
             unset bridge_up
         fi

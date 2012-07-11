@@ -1,38 +1,87 @@
 #!/bin/bash
 ### jack-connect2: Batch Connect ######
-# Version 20120711-1 by Scott Garrett #
+# Version 20120711-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 shopt -u $(shopt | cut -f1)
 shopt -s force_fignore
 set -f
 unset action
-while getopts dr:w: opt; do
+while getopts dRr:w: opt; do
     declare "opt_$opt"="${OPTARG:-0}"
     [[ $opt == 'd' ]] && action='disconnect'
 done
 shift $((OPTIND - 1))
+
+if [[ -z $1 ]]; then
+cat <<EOF
+Usage: ${0##*/} [opts] in_port out_port [wait_callback]
+Options:
+    -d  Disconnect
+    -r= Number of retries (default: 0)
+    -w= Number of seconds to wait between retries (default: 5)
+    -R  Retry forever (useful with wait callback)
+Wait Callback
+    If set, this function or script will be executed before
+    attepting to connect. If it returns a non-zero exit status,
+    then jack-connect2 will wait (-w) before re-executing the
+    callback until it returns a successful exit status.
+
+    Included:
+        loop_c_active   Return if ALSA loopback capture device
+                        is active, useful for jack-auto-loopback.
+                        loop_c_stat variable should point to the
+                        path to the loopback capture subdevice in
+                        /proc.
+                        Default: /proc/asound/Loopback/pcm0c/sub0
+EOF
+    exit 2
+fi
+
 IFS=$'\n'
 action=${action:-connect}
 opt_r=${opt_r:-0}
 opt_w=${opt_w:-5}
+loop_c_stat=${loop_c_stat:-/proc/asound/Loopback/pcm0c/sub0}
+
+loop_c_active () {
+    local param value IFS=' '
+    read param value <"$loop_c_stat/status"
+    [[ $value == 'RUNNING' ]]
+}
+
 ((opt_r++))
-for ((a=0; a<opt_r; a++)); do
-    echo "Attempt $((a+1)) of $opt_r"
-    ports=$(jack_lsp | grep -v '^[jJ]ack: ')
-    out_ports=($(echo "$ports" | grep "^$2"))
-    i=0 c=0
-    for in_port in $(echo "$ports" | grep "^$1"); do
-        out_port=${out_ports[i]}
-        [[ -z ${out_ports[((++i))]} ]] && i=0
-        echo "${action}ing $in_port :: $out_port"
-        jack_$action "$in_port" "$out_port" || continue
-        ((c++))
+if [[ $3 ]]; then
+    echo "Waiting on: $3"
+    while ! "$3"; do sleep $opt_w; done
+fi
+while :; do
+    for ((a=0; a<opt_r; a++)); do
+        [[ -z $opt_R ]] && echo "Attempt $((a+1)) of $opt_r"
+        ports=$(jack_lsp | grep -v '^[jJ]ack: ')
+        out_ports=($(echo "$ports" | grep "^$2"))
+        i=0 c=0
+        if [[ $out_ports ]]; then
+            for in_port in $(echo "$ports" | grep "^$1"); do
+                out_port=${out_ports[i]}
+                [[ -z ${out_ports[((++i))]} ]] && i=0
+                echo "${action}ing $in_port :: $out_port"
+                jack_$action "$in_port" "$out_port" || continue
+                ((c++))
+            done
+            echo "$c successful ${action}ion(s)"
+        else
+            echo 'No matching output port(s)'
+        fi
+        e=0
+        [[ $c != 0 ]] && break
+        e=1
+        sleep $opt_w
     done
-    echo "$c successful ${action}ion(s)"
-    e=0
-    [[ $c != 0 ]] && break
-    e=1
-    sleep $opt_w
+    [[ $opt_R ]] || break
+    if [[ $c != 0 && $3 ]]; then
+        echo "Waiting on: $3"
+        while "$3"; do sleep $opt_w; done
+    fi
 done
 exit $e

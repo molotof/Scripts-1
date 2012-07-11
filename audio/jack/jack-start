@@ -10,7 +10,7 @@ kill_jack () {
 }
 
 cleanup () {
-    event-scripts jack pre-stop
+    event-scripts jack stop
     kill_jack
     sleep 1
     if kill_jack -0; then
@@ -18,22 +18,18 @@ cleanup () {
         kill_jack -9
     fi
     wait
-    event-scripts jack post-stop
     exit
 }
 
 trap cleanup INT TERM HUP
-event-scripts jack pre-start
+kill_jack -w
 jackd ${options['global']} ${options["$HOSTNAME"]} &
 for ((n=0; n<5; n++)); do
     sleep 1
     if kill -0 $! 2>/dev/null; then
-        event-scripts jack post-start
+        event-scripts jack start
         break
     fi
 done
 wait
-if ! kill_jack -0; then
-    event-scripts jack pre-stop
-    event-scripts jack post-stop
-fi
+kill_jack -0 || cleanup
