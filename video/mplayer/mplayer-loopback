@@ -1,0 +1,24 @@
+#!/bin/bash
+while getopts d:a opt; do
+    declare "opt_$opt"="${OPTARG:-0}"
+done
+shift $((OPTIND - 1))
+[[ $opt_a ]] && mplayer=mplayer-loopback-jack
+fifo="/tmp/mplayer-loopback-jack.fifo"
+
+cleanup () {
+    kill $(jobs -p) 2>/dev/null
+    wait
+    rm "$fifo" 2>/dev/null
+    exit
+}
+
+trap cleanup INT TERM HUP
+for v in "$@"; do
+    rm "$fifo" 2>/dev/null
+    mkfifo "$fifo"
+    yuv4mpeg_to_v4l2 /dev/video${d:-0} <"$fifo" &
+    ${mplayer:-mplayer} "$v" -vf scale=176:144 -vo yuv4mpeg:file="$fifo"
+    rm "$fifo"
+done
+cleanup

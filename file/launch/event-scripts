@@ -1,0 +1,36 @@
+#!/bin/bash
+### Run Event Script(s) ###############
+# Version 20120710-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+event_dirs=(
+    "$HOME/.local/share/event-scripts" # Home dir needs to be first.
+    "/usr/local/share/event-scripts"
+    "/etc/xdg/event-scripts"
+)
+
+launch () {
+    export TERM='dumb'
+    unset PS1
+    "$@" </dev/null &>/dev/null & disown
+}
+
+e=1
+mkdir -p "$event_dirs"
+for event_path in "${event_dirs[@]}"; do
+    event_path=$(IFS='/'; echo "$event_path/$*")
+    if [[ -d "$event_path" ]]; then
+        find -L "$event_path" -maxdepth 1 -type f -executable \
+            -not -iregex ".*.\(swp\|tmp\|bak\|old\)\|~.*" -exec launch "{}" \;
+        e=0
+    elif [[ -f "$event_path" && -x "$event_path" ]]; then
+        "$exec_path"
+        e=0
+    fi
+done
+if [[ $e == 0 ]]; then
+    echo "Event script(s) executed: $event_path"
+else
+    echo "No event script(s): $event_path"
+fi
+exit $e

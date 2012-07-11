@@ -1,0 +1,7 @@
+#!/bin/bash
+# Try to connect in the background because we want MPlayer to still be
+# controllable from the terminal.
+jack-connect2 -r2 -w3 'mplayer-loopback:' 'loopback_in:playback' &
+mplayer -ao jack:name=mplayer-loopback "$@"
+wait
+jack-connect2 -d 'mplayer-loopback:' 'loopback_in:playback'

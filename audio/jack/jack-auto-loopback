@@ -1,0 +1,61 @@
+#!/bin/bash
+### Automatic ALSA Loopback to JACK ###
+# Version 20120710-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+
+client_name='loopback_in'
+loop_p_name='loop_playback'
+loop_c_dev='Loopback'
+info_file="$HOME/.jack-auto-loopback"
+
+loop_c_proc="/proc/asound/$loop_c_dev/pcm0c/sub0"
+declare -A loop_c_params=()
+IFS=$' :\t\n'
+
+get_hw_params () {
+    local param value
+    loop_c_params=()
+    while read -r param value trash; do
+        [[ $value ]] && loop_c_params["$param"]=$value
+    done <"$loop_c_proc/hw_params"
+}
+
+cleanup () {
+    echo > "$info_file"
+    kill $(jobs -p) 2>/dev/null
+    wait
+}
+
+trap 'cleanup; exit 0' INT HUP TERM
+echo "Watching $loop_c_dev capture."
+cleanup
+unset alsa_out_pid
+while :; do
+    read param value <"$loop_c_proc/status"
+    if [[ $value == 'RUNNING' ]]; then
+        if [[ -z $bridge_up ]]; then
+            echo "$loop_c_dev capture opened."
+            get_hw_params
+            ao_opts=(
+                -j "$client_name"
+                -d "$loop_p_name"
+                -r ${loop_c_params['rate']}
+                -c ${loop_c_params['channels']}
+                -q ${resample_quality:-1}
+            )
+            echo "Starting: alsa_out ${ao_opts[*]}"
+            alsa_out "${ao_opts[@]}" &
+            echo "${loop_c_params['rate']} ${loop_c_params['channels']}" \
+                >"$info_file"
+            bridge_up=1
+        fi
+    else
+        if [[ $bridge_up ]]; then
+            echo "$loop_c_dev capture closed; stopping bridge."
+            cleanup
+            unset bridge_up
+        fi
+    fi
+    sleep ${poll_interval:-5}
+done

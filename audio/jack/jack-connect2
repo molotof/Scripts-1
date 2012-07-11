@@ -1,0 +1,38 @@
+#!/bin/bash
+### jack-connect2: Batch Connect ######
+# Version 20120711-1 by Scott Garrett #
+# Wintervenom [(at)] archlinux.us     #
+#######################################
+shopt -u $(shopt | cut -f1)
+shopt -s force_fignore
+set -f
+unset action
+while getopts dr:w: opt; do
+    declare "opt_$opt"="${OPTARG:-0}"
+    [[ $opt == 'd' ]] && action='disconnect'
+done
+shift $((OPTIND - 1))
+IFS=$'\n'
+action=${action:-connect}
+opt_r=${opt_r:-0}
+opt_w=${opt_w:-5}
+((opt_r++))
+for ((a=0; a<opt_r; a++)); do
+    echo "Attempt $((a+1)) of $opt_r"
+    ports=$(jack_lsp | grep -v '^[jJ]ack: ')
+    out_ports=($(echo "$ports" | grep "^$2"))
+    i=0 c=0
+    for in_port in $(echo "$ports" | grep "^$1"); do
+        out_port=${out_ports[i]}
+        [[ -z ${out_ports[((++i))]} ]] && i=0
+        echo "${action}ing $in_port :: $out_port"
+        jack_$action "$in_port" "$out_port" || continue
+        ((c++))
+    done
+    echo "$c successful ${action}ion(s)"
+    e=0
+    [[ $c != 0 ]] && break
+    e=1
+    sleep $opt_w
+done
+exit $e
