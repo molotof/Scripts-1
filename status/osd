@@ -30,7 +30,6 @@ trap 'exit 0' PIPE
 f="-*-dejavu sans mono-bold-r-*-*-$size-*-*-*-*-*-iso10646-1"
 o="osd_cat -d${time} -A ${horiz} -p ${vert} -O3 -c ${color} -u ${ocolor}"
 
-echo -e "$*" | speak &
 if [[ -z ${input} ]]; then
     if [[ -z ${blink} ]]; then
         echo -e "$*" | $o -f "$f"

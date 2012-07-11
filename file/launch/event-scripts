@@ -1,6 +1,6 @@
 #!/bin/bash
 ### Run Event Script(s) ###############
-# Version 20120710-1 by Scott Garrett #
+# Version 20120711-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 event_dirs=(
@@ -29,8 +29,8 @@ for event_path in "${event_dirs[@]}"; do
     fi
 done
 if [[ $e == 0 ]]; then
-    echo "Event script(s) executed: $event_path"
+    echo "Event script(s) executed for $*"
 else
-    echo "No event script(s): $event_path"
+    echo "No event script(s) for $*"
 fi
 exit $e
