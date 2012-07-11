@@ -1,6 +1,6 @@
 #!/bin/bash
 ### jack-connect2: Batch Connect ######
-# Version 20120711-2 by Scott Garrett #
+# Version 20120711-3 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 shopt -u $(shopt | cut -f1)
@@ -21,11 +21,10 @@ Options:
     -r= Number of retries (default: 0)
     -w= Number of seconds to wait between retries (default: 5)
     -R  Retry forever (useful with wait callback)
-Wait Callback
-    If set, this function or script will be executed before
-    attepting to connect. If it returns a non-zero exit status,
-    then jack-connect2 will wait (-w) before re-executing the
-    callback until it returns a successful exit status.
+Wait Callback:
+    If set, jack-connect2 will wait for this function or script
+    to return a success before attempting to connect. The wait
+    time can be set with the -w option.
 
     Included:
         loop_c_active   Return if ALSA loopback capture device
