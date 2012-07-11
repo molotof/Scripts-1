@@ -1,6 +1,6 @@
 #!/bin/bash
 ### Automatic ALSA Loopback to JACK ###
-# Version 20120711-1 by Scott Garrett #
+# Version 20120711-2 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 
@@ -30,7 +30,7 @@ cleanup () {
 trap 'cleanup; exit 0' INT HUP TERM
 echo "Watching $loop_c_dev capture."
 cleanup
-unset alsa_out_pid
+unset bridge_up
 while :; do
     read param value <"$loop_c_proc/status"
     if [[ $value == 'RUNNING' ]]; then
