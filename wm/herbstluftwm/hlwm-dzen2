@@ -1,6 +1,6 @@
 #!/bin/bash
 ### Herbstluftwm Dzen2 Status #########
-# Version 20120701-1 by Scott Garrett #
+# Version 20120715-1 by Scott Garrett #
 # Wintervenom [(at)] archlinux.us     #
 #######################################
 
@@ -9,7 +9,8 @@ set -f
 ## Globals ##
 show=(load:L mem:M batt:B temp:T)
 sep=':'
-date_fmt='   %a %m%d:%H%M.%S'
+clock=1
+date_fmt='   %a %m%d:%M.%S'
 interval=15
 
 hc='herbstclient'
@@ -71,15 +72,15 @@ update_stats () {
     echo $'update_stats\t'"$stats" >&9
 }
 
+clock () {
+    echo $'clock\t'"$(date "+$date_fmt")"
+}
+
 
 ## Main ##
 conf_dir="$HOME/.config/hlwm-dzen2"
 io="$conf_dir/io"
 hooks='(focus|window_title|tag)_changed|update_stats|reload|quit_panel'
-
-window_id=0
-tags=$(get_tags)
-oifs=$IFS
 
 mkdir -p "$conf_dir/scripts"
 [[ -f "$conf_dir/config" ]] && . "$conf_dir/config"
@@ -88,6 +89,9 @@ while read -r file; do
 done < <(find "$conf_dir/scripts" -maxdepth 1 -type f \
     -not -iregex ".*.\(swp\|tmp\|bak\|old\)\|~.*" | sort -u)
 
+window_id=0
+tags=$(get_tags)
+oifs=$IFS
 trap cleanup INT TERM HUP
 
 rm "$io" 2>/dev/null
@@ -96,19 +100,27 @@ exec 9<&-
 exec 9<>"$io"
 $hc -i "$hooks" >&9 &
 (
-    echo clock
-    update_stats
-    while :; do
+    if [[ $clock == 1 ]]; then
+        clock
+        update_stats
+        while :; do
+            sleep 1
+            clock
+            ((SECONDS % interval == 0)) && { update_stats & }
+        done
+    else
         echo clock
-        ((SECONDS % interval == 0)) && { update_stats & }
-        sleep 1
-    done
+        while :; do
+            update_stats
+            sleep $interval
+        done
+    fi
 ) >&9 &
 while IFS=$'\t' read -r hook p1 p2; do
     if [[ $hook ]]; then
         case "$hook" in
             clock)
-                clock=$(date "+$date_fmt") ;;
+                clock=$p1 ;;
             tag_changed)
                 tags=$(get_tags) ;;
             focus_changed)

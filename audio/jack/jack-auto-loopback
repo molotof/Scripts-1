@@ -43,6 +43,7 @@ while :; do
                 -r ${loop_c_params['rate']}
                 -c ${loop_c_params['channels']}
                 -q ${resample_quality:-1}
+                -f 30000 -m 64
             )
             echo "Starting: alsa_out ${ao_opts[*]}"
             alsa_out "${ao_opts[@]}" &

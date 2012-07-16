@@ -5,7 +5,8 @@
 #######################################
 # Try to connect in the background because we want MPlayer to still be
 # controllable from the terminal.
-jack-connect2 -R -w5 'mplayer-loopback:' 'loopback_in:playback' loop_c_active &
+jack-connect2 -R -w5 'mplayer-loopback:' 'loopback_in:playback' \
+    loop_c_active >/dev/null &
 mplayer -ao jack:name=mplayer-loopback "$@"
 kill $(jobs -p) 2>/dev/null
 wait

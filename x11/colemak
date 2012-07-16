@@ -1,0 +1,6 @@
+#!/bin/bash
+exec setxkbmap -layout 'us(colemak),us' -option -option grp:shift_caps_toggle \
+    -option compose:ralt -option lv3:rctrl_switch \
+    -option nbsp:level3n -option terminate:ctrl_alt_bkspc
+reset-xbindkeys
+
